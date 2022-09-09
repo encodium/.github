@@ -1,0 +1,10 @@
+{
+    "name": "Kubernetes Lint",
+    "description": "Kubernetes Lint Workflow",
+    "categories": [
+        "Kubernetes"
+    ],
+    "filePatterns": [
+        "deployments/*"
+    ]
+}
