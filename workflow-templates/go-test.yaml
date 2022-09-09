@@ -1,0 +1,41 @@
+name: Go Test
+on:
+  pull_request:
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.19.x
+      - name: Go mod cache
+        id: go-cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            vendor
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.*') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Go mod vendor
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        env:
+          GOPRIVATE: "github.com/encodium"
+        run: |
+          echo "machine github.com login rp-build-user password ${{ secrets.CLONE_PAT }}" > ~/.netrc
+          go mod vendor
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.45.2
+          skip-go-installation: true
+          args: --print-issued-lines=true -c ./.golangci.yml --max-same-issues 0 -v --timeout 5m
+      - name: Go test
+        run: |
+          go test ./... -mod=vendor -cover -coverprofile coverage.out -coverpkg ./...
+          GOFLAGS=-mod=vendor go tool cover -func=coverage.out

@@ -1,0 +1,11 @@
+{
+    "name": "Go Test",
+    "description": "Go Test Workflow",
+    "iconName": "gopher",
+    "categories": [
+        "Go"
+    ],
+    "filePatterns": [
+        ".*\\.go$"
+    ]
+}
