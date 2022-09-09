@@ -1,6 +1,11 @@
 name: Commit Lint
 on:
-  pull_request:
+  workflow_call:
+    inputs:
+      configFile:
+        required: false
+        type: string
+        default: ./.commitlintrc.yml
 
 jobs:
   commitlint:
@@ -14,4 +19,4 @@ jobs:
       - name: commitlint
         uses: wagoid/commitlint-github-action@v4
         with:
-          configFile: "./.commitlintrc.yml"
+          configFile: ${{ inputs.configFile }}
