@@ -1,0 +1,49 @@
+name: Go Test Integration
+on:
+  workflow_call:
+    inputs:
+      services:
+        required: false
+        type: string
+        description: The service(s) to watch and abort on for the run of the integration test
+        default: integration-test
+    secrets:
+      token:
+        required: true
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Go mod cache
+        id: go-cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            vendor
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.*') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Go mod vendor
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        env:
+          GOPRIVATE: "github.com/encodium"
+        run: |
+          echo "machine github.com login rp-build-user password ${{ secrets.token }}" > ~/.netrc
+          go mod vendor
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: rp-build-user
+          password: ${{ secrets.token }}
+      - name: Docker compose pull
+        run: docker compose --file ./build/docker-compose.yml --file ./build/docker-compose.test.yml --project-directory . pull
+      - name: Docker layer caching
+        uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+      - name: Docker compose up
+        run: docker compose --file ./build/docker-compose.yml --file ./build/docker-compose.test.yml --project-directory . up --build --abort-on-container-exit ${{ inputs.directory }} --exit-code-from integration-test
