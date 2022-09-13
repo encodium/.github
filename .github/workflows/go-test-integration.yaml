@@ -46,4 +46,4 @@ jobs:
         uses: satackey/action-docker-layer-caching@v0.0.11
         continue-on-error: true
       - name: Docker compose up
-        run: docker compose --file ./build/docker-compose.yml --file ./build/docker-compose.test.yml --project-directory . up --build --abort-on-container-exit ${{ inputs.directory }} --exit-code-from integration-test
+        run: docker compose --file ./build/docker-compose.yml --file ./build/docker-compose.test.yml --project-directory . up --build --abort-on-container-exit ${{ inputs.services }} --exit-code-from integration-test
