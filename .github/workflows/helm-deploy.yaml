@@ -1,0 +1,60 @@
+name: Helm Deployment
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Tag of docker image to deploy"
+        required: true
+        type: string
+      namespace:
+        description: "Kubernetes namespace to deploy resources in"
+        required: false
+        default: api
+        type: string
+      values-file:
+        description: "Additional values.yaml file to include in deployment"
+        required: false
+        type: string
+      environment:
+        description: "Target environment for deployment (stg|prod)"
+        required: true
+        type: string
+    secrets:
+      k8s_server:
+        required: true
+      k8s_token:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ inputs.image_tag }}
+      - name: Setup Helm
+        uses: azure/setup-helm@v1
+      - name: Setup Kubectl
+        uses: Azure/setup-kubectl@v1
+      - name: deploy
+        run: |
+          kubectl config set-cluster k8s --server="${{ secrets.k8s_server }}"
+          kubectl config set-credentials deploy --token="${{ secrets.k8s_token }}"
+          kubectl config set-context default --cluster=k8s --user=deploy
+          kubectl config use-context default
+          helm version
+          kubectl version
+          if [ ! -z "${{ inputs.values-file }}" ]; then
+            ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
+          fi
+          helm upgrade ${{ github.event.repository.name }} ./deployments --install --wait --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
+      - name: Update GitHub release
+        if: inputs.environment == 'prod'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.image_tag }}
+          name: Release ${{ inputs.image_tag }}
+          prerelease: false
+          allowUpdates: true
+          omitBodyDuringUpdate: true
