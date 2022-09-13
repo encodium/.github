@@ -1,0 +1,52 @@
+name: Slack Notification
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Tag of docker image to deploy"
+        required: true
+        type: string
+      namespace:
+        description: "Kubernetes namespace to deploy resources in"
+        required: false
+        default: api
+        type: string
+      dashboard_url:
+        description: "url to deployment dashboard"
+        required: false
+        type: string
+    secrets:
+      slack_webhook_url:
+        required: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send deployment notification
+        uses: slackapi/slack-github-action@v1.19.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "${{ github.event.repository.name }} deployed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*${{ github.event.repository.name }} deployed*\n\tView the <${{ inputs.dashboard_url }}|Deployment>"
+                  },
+                  "accessory": {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "${{ inputs.image_tag }}"
+                    },
+                    "url": "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.image_tag }}"
+                  }
+                }
+              ]
+            }
