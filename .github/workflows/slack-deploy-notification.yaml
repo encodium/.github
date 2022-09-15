@@ -17,7 +17,7 @@ on:
         type: string
     secrets:
       slack_webhook_url:
-        required: false
+        required: true
 
 jobs:
   notify:
