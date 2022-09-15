@@ -1,6 +1,9 @@
 name: Go Test
 on:
   workflow_call:
+    secrets:
+      clone_pat:
+        required: true
 
 jobs:
   go-test:
@@ -27,7 +30,7 @@ jobs:
         env:
           GOPRIVATE: "github.com/encodium"
         run: |
-          echo "machine github.com login rp-build-user password ${{ secrets.CLONE_PAT }}" > ~/.netrc
+          echo "machine github.com login rp-build-user password ${{ secrets.clone_pat }}" > ~/.netrc
           go mod vendor
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
