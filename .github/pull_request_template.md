@@ -13,7 +13,7 @@
 
 These should be followed unless you're dealing with an emergency. In an emergency, use your best judgment. 
 
-- [ ] I've tested the code as an end user would.
+- [ ] I've tested the code as an end user would and included appropriate testing steps 
 - [ ] For all new functionality, I have added thorough, applicable tests that validate my changes
 - [ ] For improvements to existing functionality, I've followed the [campsite rule](https://wolfgang-ziegler.com/blog/Development-Practice-The-Campsite-Rule.aspx) (made it better than it was). This is for tests or other code behavior. Don't overinvest, but also don't underinvest in "campsite" practices to improve the area you are working in. Also it can be good to separate the commits for your cleanup work and your functional changes. 
 - [ ] The added feature contains necessary observability
