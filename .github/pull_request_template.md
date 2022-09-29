@@ -11,14 +11,15 @@
 
 ## Pre-review checklist
 
-These should be followed unless you're dealing with an emergency. In an emergency, use your best judgment. 
+If some steps are not applicable or in your judgment not necessary, remove and explain why rather than leave checkmarks blank.
 
 - [ ] I've tested the code as an end user would and included appropriate testing steps 
 - [ ] For all new functionality, I have added thorough, applicable tests that validate my changes
 - [ ] For improvements to existing functionality, I've followed the [campsite rule](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git), leaving it a little better than I found it. 
 - [ ] The added feature contains necessary observability
 - [ ] I have made corresponding changes to the documentation
-- [ ] Request a review from a [merger](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git) (list available [here](https://github.com/orgs/encodium/teams/mergers))
+
+When done with the checklist, request a review from a [merger](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git) (list available [here](https://github.com/orgs/encodium/teams/mergers))
 
 ## Reviewer checklist
 
