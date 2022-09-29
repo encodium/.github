@@ -15,10 +15,10 @@ These should be followed unless you're dealing with an emergency. In an emergenc
 
 - [ ] I've tested the code as an end user would and included appropriate testing steps 
 - [ ] For all new functionality, I have added thorough, applicable tests that validate my changes
-- [ ] For improvements to existing functionality, I've followed the [campsite rule](https://wolfgang-ziegler.com/blog/Development-Practice-The-Campsite-Rule.aspx) (made it better than it was). This is for tests or other code behavior. Don't overinvest, but also don't underinvest in "campsite" practices to improve the area you are working in. Also it can be good to separate the commits for your cleanup work and your functional changes. 
+- [ ] For improvements to existing functionality, I've followed the [campsite rule](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git), leaving it a little better than I found it. 
 - [ ] The added feature contains necessary observability
 - [ ] I have made corresponding changes to the documentation
-- [ ] Request a review from a [merger](https://github.com/orgs/encodium/teams/mergers) from your team, or the on-duty merger. You should get a review within 24 hours -- if you don't, please raise the alarm. Also, for urgent changes, be sure to escalate that you need review. Also, if you'd doing a lot of back and forth via PR review, you might want to talk directly with the person.
+- [ ] Request a review from a [merger](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git) (list available [here](https://github.com/orgs/encodium/teams/mergers))
 
 ## Reviewer checklist
 
