@@ -19,9 +19,16 @@ If some steps are not applicable or in your judgment not necessary, remove and e
 - [ ] The added feature contains necessary observability
 - [ ] I have made corresponding changes to the documentation
 
-When done with the checklist, request a review from a [merger](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git) (list available [here](https://github.com/orgs/encodium/teams/mergers))
+## Review checklist
+- [ ] Review with peer on team.
+- [ ] Review with team 'merger' or on-duty merger. Details [here](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git). 
 
-## Reviewer checklist
+## Peer review checklist
+
+- [ ] Make sure the pre-review checklist has been completed.
+- [ ] I've run the code as an end user would.
+
+## Merger review checklist
 
 - [ ] Make sure the pre-review checklist has been completed.
 - [ ] I've run the code as an end user would.
