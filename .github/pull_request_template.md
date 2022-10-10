@@ -15,7 +15,7 @@ If some steps are not applicable or in your judgment not necessary, remove and e
 
 - [ ] I've tested the code as an end user would and included appropriate testing steps 
 - [ ] For all new functionality, I have added thorough, applicable tests that validate my changes
-- [ ] For improvements to existing functionality, I've followed the [campsite rule](https://www.stepsize.com/blog/how-to-be-an-effective-boy-girl-scout-engineer), leaving it a little better than I found it. 
+- [ ] For improvements to existing functionality, I've followed the [campsite rule](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git), leaving it a little better than I found it. 
 - [ ] The added feature contains necessary observability
 - [ ] I have made corresponding changes to the documentation
 
