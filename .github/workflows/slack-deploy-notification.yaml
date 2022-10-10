@@ -31,7 +31,7 @@ jobs:
         with:
           payload: |
             {
-              "text": "${{ github.event.repository.name }} deployed",
+              "text": "${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}",
               "blocks": [
                 {
                   "type": "section",
