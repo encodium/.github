@@ -31,13 +31,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}",
+              "text": "${{ github.event.repository.name }} deployed",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*${{ github.event.repository.name }} deployed*\n\tView the <${{ inputs.dashboard_url }}|Deployment>"
+                    "text": "*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*\n\tView the <${{ inputs.dashboard_url }}|Deployment>"
                   },
                   "accessory": {
                     "type": "button",
