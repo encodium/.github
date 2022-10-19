@@ -9,7 +9,7 @@ on:
         default: openapi.yaml
       configLocation:
         description: The filepath to the openapi config file.
-        required: false
+        required: true
         type: string
       templateLocation:
         description: The path to the openapi template directory.
@@ -29,10 +29,6 @@ on:
         required: false
         type: string
         default: $${{ github.repository_owner }}
-      package:
-        description: The name of the package to generate the code in.
-        required: true
-        type: string
 
 jobs:
   generate:
@@ -58,11 +54,6 @@ jobs:
           file: ${{ inputs.specLocation }}
           title: info.title
           version: info.version
-      - name: Set Config File
-        id: set-config
-        if: ${{ inputs.configLocation }}
-        run: |
-          echo 'OPENAPI_CONFIG=-c ${{ inputs.configLocation }}' >> $GITHUB_OUTPUT
       - name: Set Template Dir
         id: set-template
         if: ${{ inputs.templateLocation }}
@@ -74,10 +65,9 @@ jobs:
           generator: php
           generator-tag: ${{ inputs.version }}
           openapi-file: ${{ inputs.specLocation }}
+          config-file: ${{ inputs.configLocation }}
           command-args: |
             --git-user-id ${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} \
-            --additional-properties=\'invokerPackage=${{ inputs.package }}\' \
-            ${{ steps.set-config.outputs.OPENAPI_CONFIG }} \
             ${{ steps.set-template.outputs.OPENAPI_TEMPLATE }} \
             -o .
       - name: Remove Spec
