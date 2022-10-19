@@ -75,7 +75,7 @@ jobs:
           generator-tag: ${{ inputs.version }}
           openapi-file: ${{ inputs.specLocation }}
           command-args: |
-            --git-user-id $${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} \
+            --git-user-id ${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} \
             --additional-properties=invokerPackage=${{ inputs.package }} \
             ${{ steps.set-config.outputs.OPENAPI_CONFIG }} \
             ${{ steps.set-template.outputs.OPENAPI_TEMPLATE }} \
