@@ -7,6 +7,14 @@ on:
         required: false
         type: string
         default: openapi.yaml
+      configLocation:
+        description: The filepath to the openapi config file.
+        required: false
+        type: string
+      templateLocation:
+        description: The path to the openapi template directory.
+        required: false
+        type: string
       payload:
         description: The base64 encoded openapi spec. Written to the spec filepath if present.
         required: false
@@ -60,6 +68,8 @@ jobs:
           generator: php
           generator-tag: ${{ inputs.version }}
           openapi-file: ${{ inputs.specLocation }}
+          config-file: ${{ inputs.configLocation }}
+          template-dir: ${{ inputs.templateLocation }}
           command-args: --git-user-id $${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} --additional-properties=invokerPackage=${{ inputs.package }} ${{ inputs.options }} -o .
       - name: Remove Spec
         run: rm -f ${{ inputs.specLocation }}
