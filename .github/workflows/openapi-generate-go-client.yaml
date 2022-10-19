@@ -62,12 +62,12 @@ jobs:
         id: set-config
         if: ${{ inputs.configLocation }}
         run: |
-          echo 'OPENAPI_CONFIG="-c {{ inputs.configLocation }}"' >> $GITHUB_OUTPUT
+          echo 'OPENAPI_CONFIG=-c ${{ inputs.configLocation }}' >> $GITHUB_OUTPUT
       - name: Set Template Dir
         id: set-template
         if: ${{ inputs.templateLocation }}
         run: |
-          echo 'OPENAPI_TEMPLATE="-t ${{ inputs.templateLocation }}"' >> $GITHUB_OUTPUT
+          echo 'OPENAPI_TEMPLATE=-t ${{ inputs.templateLocation }}' >> $GITHUB_OUTPUT
       - name: Generate GO Client
         uses: openapi-generators/openapitools-generator-action@v1
         with:
