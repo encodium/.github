@@ -33,10 +33,6 @@ on:
         description: The name of the package to generate the code in.
         required: true
         type: string
-      options:
-        description: Additional options passed to the generator command.
-        required: false
-        type: string
 
 jobs:
   generate:
@@ -62,15 +58,28 @@ jobs:
           file: ${{ inputs.specLocation }}
           title: info.title
           version: info.version
+      - name: Set Config File
+        id: set-config
+        if: ${{ inputs.configLocation }}
+        run: |
+          echo 'OPENAPI_CONFIG=-c {{ inputs.configLocation }}"' >> $GITHUB_OUTPUT
+      - name: Set Template Dir
+        id: set-template
+        if: ${{ inputs.templateLocation }}
+        run: |
+          echo 'OPENAPI_TEMPLATE="-t ${{ inputs.templateLocation }}' >> $GITHUB_OUTPUT
       - name: Generate PHP Client
         uses: openapi-generators/openapitools-generator-action@v1
         with:
           generator: php
           generator-tag: ${{ inputs.version }}
           openapi-file: ${{ inputs.specLocation }}
-          config-file: ${{ inputs.configLocation }}
-          template-dir: ${{ inputs.templateLocation }}
-          command-args: --git-user-id $${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} --additional-properties=invokerPackage=${{ inputs.package }} ${{ inputs.options }} -o .
+          command-args: |
+            --git-user-id $${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} 
+            --additional-properties=invokerPackage=${{ inputs.package }} 
+            ${{ steps.set-config.outputs.OPENAPI_CONFIG }}
+            ${{ steps.set-template.outputs.OPENAPI_TEMPLATE }}
+            -o .
       - name: Remove Spec
         run: rm -f ${{ inputs.specLocation }}
       - name: Commit
