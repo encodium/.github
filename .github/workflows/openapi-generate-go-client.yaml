@@ -75,10 +75,10 @@ jobs:
           generator-tag: ${{ inputs.version }}
           openapi-file: ${{ inputs.specLocation }}
           command-args: |
-            --git-user-id $${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} 
-            --additional-properties=isGoSubmodule=true --package-name ${{ inputs.package }} 
-            ${{ steps.set-config.outputs.OPENAPI_CONFIG }}
-            ${{ steps.set-template.outputs.OPENAPI_TEMPLATE }}
+            --git-user-id $${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} \
+            --additional-properties=isGoSubmodule=true --package-name ${{ inputs.package }} \
+            ${{ steps.set-config.outputs.OPENAPI_CONFIG }} \
+            ${{ steps.set-template.outputs.OPENAPI_TEMPLATE }} \
             -o .
       - name: Remove Spec
         run: rm -f ${{ inputs.specLocation }}
