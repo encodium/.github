@@ -34,7 +34,7 @@ jobs:
         with:
           ref: ${{ inputs.image_tag }}
       - name: Setup Helm
-        uses: azure/setup-helm@v1
+        uses: azure/setup-helm@v3
       - name: Setup Kubectl
         uses: Azure/setup-kubectl@v1
       - name: deploy
