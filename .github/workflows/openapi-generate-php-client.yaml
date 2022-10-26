@@ -29,6 +29,14 @@ on:
         required: false
         type: string
         default: $${{ github.repository_owner }}
+      release:
+        description: The ID of the release where the spec asset is located.
+        required: false
+        type: string
+      repository:
+        description: The repository that triggered the client generation.
+        required: false
+        type: string
 
 jobs:
   generate:
@@ -39,9 +47,17 @@ jobs:
       - name: Remove Generated Files
         continue-on-error: true
         run: xargs -I{} rm -rf "{}" < .openapi-generator/FILES
+      - name: Download Release Asset
+        uses: dsaltares/fetch-gh-release-asset@master
+        if: ${{ inputs.release }} != ''
+        with:
+          repo: ${{ inputs.repository }}
+          version: ${{ inputs.release }}
+          file: ${{ inputs.specLocation }}
+          target: ${{ inputs.specLocation }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Write Spec
         run: |
-          mkdir -p api
           if [[ ! -z "${{ inputs.payload }}" ]]
           then
             echo "${{ inputs.payload }}" | base64 --decode > ${{ inputs.specLocation }}
