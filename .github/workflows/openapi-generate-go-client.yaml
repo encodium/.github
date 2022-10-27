@@ -39,8 +39,11 @@ on:
         type: string
       repository:
         description: The repository that triggered the client generation.
-        required: false
+        required: true
         type: string
+    secrets:
+      token:
+        required: true
 
 jobs:
   generate:
@@ -59,7 +62,7 @@ jobs:
           version: ${{ inputs.release }}
           file: ${{ inputs.specLocation }}
           target: ${{ inputs.specLocation }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.token }}
       - name: Write Spec
         run: |
           if [[ ! -z "${{ inputs.payload }}" ]]
