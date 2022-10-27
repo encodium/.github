@@ -28,7 +28,7 @@ on:
         description: The organization to use when generating the client.
         required: false
         type: string
-        default: $${{ github.repository_owner }}
+        default: ${{ github.repository_owner }}
       release:
         description: The ID of the release where the spec asset is located.
         required: false

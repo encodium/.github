@@ -28,7 +28,7 @@ on:
         description: The organization to use when generating the client.
         required: false
         type: string
-        default: $${{ github.repository_owner }}
+        default: ${{ github.repository_owner }}
       package:
         description: The name of the package to generate the code in.
         required: true
