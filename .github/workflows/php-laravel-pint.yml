@@ -1,12 +1,11 @@
-name: Laravel Pint (PHP CS Fixer)
-
+name: Fix PHP Code Style
 on:
   workflow_call:
 
 jobs:
   php-cs-fixer:
     runs-on: ubuntu-latest
-    name: PHP CS Fixer
+    name: Laravel Pint + Commit
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -21,7 +20,10 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          tools: pint
+          tools: none
       - name: Run Laravel Pint
-        run: |
-          pint --test
+        uses: aglipanci/laravel-pint-action@2.1.0
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore(pint): fix code style issues"
