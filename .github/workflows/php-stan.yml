@@ -19,7 +19,7 @@ jobs:
         with:
           coverage: none
           php-version: "8.2"
-          tools: composer, phpstan
+          tools: composer
         env:
           COMPOSER_AUTH_JSON: |
             {
@@ -40,10 +40,10 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: ${{ runner.os }}-composer-
       - name: Install dependencies
-        uses: nick-invision/retry@v1
+        uses: nick-invision/retry@v2
         with:
           timeout_minutes: 5
           max_attempts: 5
           command: composer install --prefer-dist --no-interaction --no-progress
       - name: Run PHPStan
-        run: phpstan --error-format=github
+        run: composer phpstan
