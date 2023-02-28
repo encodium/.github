@@ -1,0 +1,18 @@
+name: PHPStan
+on:
+  workflow_call:
+
+jobs:
+  php-cs-fixer:
+    runs-on: ubuntu-latest
+    name: PHPStan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: phpstan
+      - name: Run PHPStan
+        run: phpstan --error-format=github
