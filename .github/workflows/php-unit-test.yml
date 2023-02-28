@@ -15,7 +15,7 @@ on:
         required: true
 
 jobs:
-  unit_tests:
+  unit-tests:
     runs-on: ubuntu-latest
     name: PHPUnit
     steps:
@@ -50,7 +50,7 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: ${{ runner.os }}-composer-
       - name: Install dependencies
-        uses: nick-invision/retry@v1
+        uses: nick-invision/retry@v2
         with:
           timeout_minutes: 5
           max_attempts: 5
