@@ -21,6 +21,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
+          tools: pint
       - name: Run Laravel Pint
         run: |
-          ./vendor/bin/pint --test
+          pint --test
