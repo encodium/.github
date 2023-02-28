@@ -1,0 +1,33 @@
+name: PHP CS Fixer
+
+on:
+  workflow_call:
+
+jobs:
+  php-cs-fixer:
+    runs-on: ubuntu-latest
+    name: PHP CS Fixer
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Cache PHP CS Fixer
+        uses: actions/cache@v3
+        with:
+          path: .php-cs-fixer.cache
+          key: ${{ runner.OS }}-${{ github.repository }}-phpcsfixer-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.OS }}-${{ github.repository }}-phpcsfixer-
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "7.4"
+
+      - name: Run PHP CS Fixer
+        run: |
+          curl --silent -L https://github.com/FriendsOfPHP/PHP-CS-Fixer/releases/download/v3.14.4/php-cs-fixer.phar -o php-cs-fixer \
+          && php php-cs-fixer fix --dry-run --diff --config=.php-cs-fixer.dist.php

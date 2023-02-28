@@ -1,0 +1,53 @@
+name: PHP Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      php_version:
+        description: "Please use latest upstream version, if possible"
+        required: false
+        type: string
+        default: 8.2
+      php_extensions:
+        description: "Don't forget to add the default list if needed"
+        required: false
+        type: string
+        default: "bcmath intl gd"
+    secrets:
+      packagist_username:
+        required: true
+      packagist_password:
+        required: true
+
+jobs:
+  unit_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php_version }}
+          tools: composer:v2
+          coverage: none
+          extensions: ${{ inputs.php_extensions }}
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: Install dependencies
+        env:
+          COMPOSER_AUTH: '{"http-basic": {"repo.packagist.com": {"username": "${{secrets.packagist_username}}", "password": "${{secrets.packagist_password}}"}}}'
+        uses: nick-invision/retry@v1
+        with:
+          timeout_minutes: 5
+          max_attempts: 5
+          command: composer install --prefer-dist --no-interaction --no-progress
+      - name: Execute tests
+        run: composer test
