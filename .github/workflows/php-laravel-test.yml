@@ -6,7 +6,7 @@ workflow_call:
       description: "Don't forget to add the default list if needed"
       required: false
       type: string
-      default: "dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, pdo_pgsql, gd, redis-phpredis/phpredis@5.3.7, igbinary, msgpack, lzf, zstd, lz4, memcached, gmp"
+      default: "dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, pdo_pgsql, gd, redis-phpredis/phpredis@5.3.7"
   secrets:
     packagist_username:
       required: true
