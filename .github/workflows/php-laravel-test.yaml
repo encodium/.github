@@ -1,17 +1,18 @@
 name: Laravel PHPUnit Tests
 
-workflow_call:
-  inputs:
-    php_extensions:
-      description: "Don't forget to add the default list if needed"
-      required: false
-      type: string
-      default: "dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, pdo_pgsql, gd, redis-phpredis/phpredis@5.3.7"
-  secrets:
-    packagist_username:
-      required: true
-    packagist_password:
-      required: true
+on:
+  workflow_call:
+    inputs:
+      php_extensions:
+        description: "Don't forget to add the default list if needed"
+        required: false
+        type: string
+        default: "dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, pdo_pgsql, gd, redis-phpredis/phpredis@5.3.7"
+    secrets:
+      packagist_username:
+        required: true
+      packagist_password:
+        required: true
 
 jobs:
   unit-tests:
