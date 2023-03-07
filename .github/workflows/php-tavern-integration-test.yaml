@@ -1,0 +1,73 @@
+name: PHP Tavern Integration Tests 
+on:
+  workflow_call:
+    inputs:
+      php_extensions:
+        description: "Don't forget to add the default list if needed"
+        required: false
+        type: string
+        default: "bcmath intl gd"
+      services:
+        required: false
+        type: string
+        description: The service(s) to watch and abort on for the run of the integration test
+        default: integration-test  
+    secrets:
+      packagist_username:
+        required: true
+      packagist_password:
+        required: true
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer, phpunit
+          coverage: none
+          extensions: ${{ inputs.php_extensions }}
+        env:
+          COMPOSER_AUTH_JSON: |
+            {
+              "http-basic": {
+                "repo.packagist.com": {
+                  "username": "${{ secrets.packagist_username }}",
+                  "password": "${{ secrets.packagist_password }}"
+                }
+              }
+            }
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: Install dependencies
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 5
+          command: composer install --prefer-dist --no-interaction --no-progress    
+      - name: Create Docker env file
+        run: touch .docker.env
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: rp-build-user
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Docker compose pull
+        run: docker compose --file ./docker-compose.yml --file ./docker-compose.test.yml --project-directory . pull
+      - name: Docker layer caching
+        uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+      - name: Docker compose up
+        run: docker compose --file ./docker-compose.yml --file ./docker-compose.test.yml --project-directory . up --build --abort-on-container-exit ${{ inputs.services }} --exit-code-from integration-test
