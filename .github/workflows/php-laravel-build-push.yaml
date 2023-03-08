@@ -101,7 +101,7 @@ jobs:
           github_token: ${{ secrets.gh_token }}
   build-and-push-webserver-image:
     runs-on: ubuntu-latest
-    name: Build + Push Webserver (nginx) Image
+    name: Build + Push Webserver (e.g. nginx) Image
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -123,7 +123,7 @@ jobs:
           push: true
           file: ${{ inputs.dockerfile_webserver_path }}
           platforms: linux/amd64
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Bump version and push tag
