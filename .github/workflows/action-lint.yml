@@ -1,0 +1,13 @@
+name: Lint GitHub Actions
+on:
+  workflow_call:
+
+jobs:
+  action-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          fail_on_error: true
+          filter_mode: "nofilter"
