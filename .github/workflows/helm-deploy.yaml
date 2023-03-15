@@ -36,7 +36,7 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v3
       - name: Setup Kubectl
-        uses: Azure/setup-kubectl@v1
+        uses: Azure/setup-kubectl@v3
       - name: deploy
         run: |
           kubectl config set-cluster k8s --server="${{ secrets.k8s_server }}"
