@@ -1,6 +1,11 @@
 name: PHPStan
 on:
   workflow_call:
+    inputs:
+      php_version:
+        required: false
+        type: string
+        default: "8.2"
     secrets:
       packagist_username:
         required: true
@@ -18,7 +23,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           coverage: none
-          php-version: "8.2"
+          php-version: ${{ inputs.php_version }}
           tools: composer
         env:
           COMPOSER_AUTH_JSON: |
