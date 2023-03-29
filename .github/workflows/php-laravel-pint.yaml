@@ -1,11 +1,6 @@
 name: Fix PHP Code Style
 on:
   workflow_call:
-    inputs:
-      php_version:
-        required: false
-        type: string
-        default: "8.2"
 
 jobs:
   php-cs-fixer:
@@ -24,7 +19,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ inputs.php_version }}
+          php-version: "8.2"
           tools: none
       - name: Run Laravel Pint
         uses: aglipanci/laravel-pint-action@2.1.0
