@@ -2,6 +2,10 @@ name: PHP Tavern Integration Tests
 on:
   workflow_call:
     inputs:
+      php_version:
+        required: false
+        type: string
+        default: "8.2"
       php_extensions:
         description: "Don't forget to add the default list if needed"
         required: false
@@ -27,7 +31,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
+          php-version: ${{ inputs.php_version }}
           tools: composer, phpunit
           coverage: none
           extensions: ${{ inputs.php_extensions }}
