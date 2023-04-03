@@ -23,7 +23,7 @@ on:
         description: The openapi generator version used.
         required: false
         type: string
-        default: v6.2.0
+        default: v6.5.0
       organization:
         description: The organization to use when generating the client.
         required: false
