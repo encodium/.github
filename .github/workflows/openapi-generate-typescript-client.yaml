@@ -95,7 +95,7 @@ jobs:
           openapi-file: ${{ inputs.specLocation }}
           command-args: |
             --git-user-id ${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} \
-            --npmName ${{ inputs.package }} \
+            --additional-properties=npmName=@${{ inputs.organization }}/${{ inputs.package }} \
             ${{ steps.set-config.outputs.OPENAPI_CONFIG }} \
             ${{ steps.set-template.outputs.OPENAPI_TEMPLATE }} \
             -o .
