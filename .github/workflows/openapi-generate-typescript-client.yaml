@@ -107,8 +107,12 @@ jobs:
           default_author: github_actions
           message: "${{ steps.spec.outputs.title }} ${{ steps.spec.outputs.version }}"
           tag: ${{ steps.spec.outputs.version }}
-      - name: Create a GitHub release
-        id: create_release
-        uses: ncipollo/release-action@v1
+      - name: Node Setup
+        uses: actions/setup-node@v3
+      - run: npm install
+      - run: npm run build
+      - uses: JS-DevTools/npm-publish@v1
         with:
-          tag: ${{ steps.spec.outputs.version }}
+          access: restricted
+          registry: https://npm.pkg.github.com/
+          token: ${{ secrets.token }}
