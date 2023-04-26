@@ -1,0 +1,68 @@
+name: Deployment
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to deploy"
+        required: true
+        type: string
+      aws_bucket_name:
+        description: "AWS bucket to deploy artifacts to"
+        required: true
+        type: string
+      aws_region:
+        description: "AWS region to be used"
+        type: string  
+        default: "us-east-1"
+      environment:
+        description: "The environment artifacts will be deployed to"
+        required: true
+        type: string
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Download previously shared build
+      - name: Get artifact
+        uses: actions/download-artifact@v1
+        with:
+          name: ${{ inputs.tag }}
+      # Set the credentials from repository settings/secrets
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id}}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+      # Copy the files from build folder to the S3 bucket
+      - name: Deploy to S3
+        run: aws s3 sync . s3://${{ inputs.aws_bucket_name }} --acl public-read
+        working-directory: ${{ inputs.tag }}
+      # Zip the original artifacts
+      - name: Zip build
+        uses: thedoctor0/zip-release@master
+        with:
+          filename: ${{ inputs.tag }}-release-build.zip
+          path: ${{ inputs.tag }}
+      # Upload original artifacts to the current workflow
+      - name: Upload build zip artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ inputs.tag }}-release-build.zip
+          path: ${{ inputs.tag }}-release-build.zip
+      # Make official GitHub release which will trigger
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.tag }}
+          artifacts: ${{ inputs.tag }}-release-build-with-config-${{ inputs.environment }}.zip,${{ inputs.tag }}-release-build.zip
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: ${{ inputs.environment == 'stg' }}
