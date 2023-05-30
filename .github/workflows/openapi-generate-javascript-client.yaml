@@ -87,15 +87,15 @@ jobs:
         if: ${{ inputs.templateLocation }}
         run: |
           echo 'OPENAPI_TEMPLATE=-t ${{ inputs.templateLocation }}' >> $GITHUB_OUTPUT
-      - name: Generate Typescript Client
+      - name: Generate Javascript Client
         uses: openapi-generators/openapitools-generator-action@v1
         with:
-          generator: typescript
+          generator: javascript
           generator-tag: ${{ inputs.version }}
           openapi-file: ${{ inputs.specLocation }}
           command-args: |
             --git-user-id ${{ inputs.organization }} --git-repo-id ${{ github.event.repository.name }} \
-            --additional-properties=npmName=@${{ inputs.organization }}/${{ inputs.package }} \
+            --additional-properties=projectName=@${{ inputs.organization }}/${{ inputs.package }} \
             ${{ steps.set-config.outputs.OPENAPI_CONFIG }} \
             ${{ steps.set-template.outputs.OPENAPI_TEMPLATE }} \
             -o .
