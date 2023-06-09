@@ -84,7 +84,7 @@ jobs:
           context: .
           push: true
           target: app
-          file: ${{ inputs.dockerfile_app_path }}
+          file: ${{ inputs.dockerfile_path }}
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
