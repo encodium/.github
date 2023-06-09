@@ -14,7 +14,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ~1.20.3
+          go-version: ~1.20.5
           check-latest: true
       - name: Go mod cache
         id: go-cache
