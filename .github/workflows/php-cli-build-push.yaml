@@ -87,5 +87,7 @@ jobs:
           file: ${{ inputs.dockerfile_path }}
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            BUILD_VERSION="${{ inputs.new_tag }}"
           cache-from: type=gha
           cache-to: type=gha,mode=max
