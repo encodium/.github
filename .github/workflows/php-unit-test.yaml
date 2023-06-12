@@ -30,7 +30,7 @@ jobs:
         with:
           php-version: ${{ inputs.php_version }}
           tools: composer, phpunit
-          coverage: none
+          coverage: pcov
           extensions: ${{ inputs.php_extensions }}
         env:
           COMPOSER_AUTH_JSON: |
