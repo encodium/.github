@@ -29,8 +29,6 @@ on:
         required: true
       packagist_password:
         required: true
-      github_token:
-        required: false
       sonar_token:
         required: false
 
@@ -87,5 +85,5 @@ jobs:
         if: ${{ inputs.run_sonar }}
         uses: SonarSource/sonarcloud-github-action@master
         env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.sonar_token }}
