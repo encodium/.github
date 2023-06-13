@@ -13,10 +13,16 @@ on:
         type: string
         default: "bcmath intl gd"
       test_command:
+        type: string
+        required: false
         default: "composer test"
       run_sonar:
+        type: boolean
+        required: false
         default: false
       coverage_file:
+        type: string
+        required: false
         default: "coverage.xml"
     secrets:
       packagist_username:
@@ -27,6 +33,7 @@ on:
         required: false
       sonar_token:
         required: false
+
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
@@ -69,14 +76,15 @@ jobs:
           max_attempts: 5
           command: composer install --prefer-dist --no-interaction --no-progress
       - name: Execute tests
-        run: ${{ inputs.test_command }}
+        run: |
+          ${{ inputs.test_command }}
         env:
           COVERAGE_FILE: ${{ inputs.coverage_file }}
       - name: Fix code coverage paths
-        if: "${{ inputs.run_sonar }}" == "true"
+        if: ${{ inputs.run_sonar }}
         run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' "${{ inputs.coverage_file }}"
       - name: SonarCloud Scan
-        if: "${{ inputs.run_sonar }}" == "true"
+        if: ${{ inputs.run_sonar }}
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.github_token }}
