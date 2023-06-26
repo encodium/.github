@@ -78,6 +78,11 @@ jobs:
           ${{ inputs.test_command }}
         env:
           COVERAGE_FILE: ${{ inputs.coverage_file }}
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v3
+        with:
+          name: php-code-coverage-report
+          path: ${{ inputs.coverage_file }}
       - name: Fix code coverage paths
         if: ${{ inputs.run_sonar }}
         run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' "${{ inputs.coverage_file }}"
