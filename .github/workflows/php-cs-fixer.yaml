@@ -44,7 +44,7 @@ jobs:
 
       - name: Install Composer dependencies
         env:
-          COMPOSER_AUTH_JSON: |
+          COMPOSER_AUTH: |
             {
               "http-basic": {
                 "repo.packagist.com": {
