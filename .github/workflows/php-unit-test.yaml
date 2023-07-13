@@ -24,6 +24,10 @@ on:
         type: string
         required: false
         default: "coverage.xml"
+      coverage_artifact_name:
+        type: string
+        required: false
+        default: "phpunit-code-coverage-report"
     secrets:
       packagist_username:
         required: true
@@ -78,6 +82,11 @@ jobs:
           ${{ inputs.test_command }}
         env:
           COVERAGE_FILE: ${{ inputs.coverage_file }}
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.coverage_artifact_name }}
+          path: ${{ inputs.coverage_file }}
       - name: Fix code coverage paths
         if: ${{ inputs.run_sonar }}
         run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' "${{ inputs.coverage_file }}"
