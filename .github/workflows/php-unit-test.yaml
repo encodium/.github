@@ -26,7 +26,7 @@ on:
         default: "coverage.xml"
       coverage_artifact_name:
         type: string
-        required: true
+        required: false
         default: "phpunit-code-coverage-report"
     secrets:
       packagist_username:
