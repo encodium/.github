@@ -16,11 +16,6 @@ on:
         required: false
         type: string
         default: "phpstan-errors.json"
-      save_artifact:
-        description: "Determines if the artifact will be uploaded"
-        required: false
-        type: boolean
-        default: false
       artifact_name:
         description: "The name of the phpstan artifact"
         required: false
@@ -66,7 +61,7 @@ jobs:
           PHPSTAN_ERROR_FILE: ${{ inputs.error_file }}
 
       - name: phpstan errors artifact
-        if: ${{ inputs.save_artifact }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v2
         with:
           name: ${{ inputs.artifact_name }}
