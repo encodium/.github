@@ -62,7 +62,7 @@ jobs:
 
       - name: phpstan errors artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ inputs.artifact_name }}
           path: ${{ inputs.error_file }}
