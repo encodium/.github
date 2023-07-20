@@ -68,9 +68,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-phpstan-
 
-      - name: Show Files
-        run: ls -la .
-
       - name: Run PHPStan
         run: ${{ inputs.command }}
         env:
