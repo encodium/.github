@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: "composer cs-fixer:lint"
+      auto_commit:
+        description: "Determines if the workflow commits fixes"
+        required: false
+        type: boolean
+        default: false
     secrets:
       packagist_username:
         required: true
@@ -57,3 +62,9 @@ jobs:
 
       - name: Run PHP CS Fixer
         run: ${{ inputs.command }}
+
+      - name: Commit changes
+        if: ${{ inputs.auto_commit }}
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore(php-cs-fixer): fix code style issues"
