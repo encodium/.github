@@ -18,6 +18,11 @@ on:
         required: false
         type: boolean
         default: false
+      commit_message:
+        description: "The commit message if auto-commit is enabled"
+        required: false
+        type: string
+        default: "chore(php-cs-fixer): fix code style issues"
     secrets:
       packagist_username:
         required: true
@@ -67,4 +72,4 @@ jobs:
         if: ${{ inputs.auto_commit }}
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "chore(php-cs-fixer): fix code style issues"
+          commit_message: ${{ inputs.commit_message }}
