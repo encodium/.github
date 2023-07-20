@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: "phpstan-errors"
+      cache_path:
+        description: "The tmpDir path (i.e. ./.phpstan.cache)"
+        required: false
+        type: string
+        default: "./.phpstan.cache"
     secrets:
       packagist_username:
         required: true
@@ -54,6 +59,17 @@ jobs:
 
       - name: Install composer dependencies
         uses: ramsey/composer-install@v2
+
+      - name: Cache PHPStan Results
+        uses: actions/cache@v3
+        with:
+          path: ${{ inputs.cache_path }}
+          key: "${{ runner.os }}-phpstan-${{ github.run_id }}" # always unique key - always writes a new cache
+          restore-keys: |
+            ${{ runner.os }}-phpstan-
+
+      - name: Show Files
+        run: ls -la .
 
       - name: Run PHPStan
         run: ${{ inputs.command }}
