@@ -13,6 +13,16 @@ on:
         required: false
         type: string
         default: "composer cs-fixer:lint"
+      auto_commit:
+        description: "Determines if the workflow commits fixes"
+        required: false
+        type: boolean
+        default: false
+      commit_message:
+        description: "The commit message if auto-commit is enabled"
+        required: false
+        type: string
+        default: "chore(php-cs-fixer): fix code style issues"
     secrets:
       packagist_username:
         required: true
@@ -43,6 +53,7 @@ jobs:
             ${{ runner.OS }}-${{ github.repository }}-phpcsfixer-
 
       - name: Install Composer dependencies
+        uses: ramsey/composer-install@v2
         env:
           COMPOSER_AUTH: |
             {
@@ -53,11 +64,12 @@ jobs:
                 }
               }
             }
-        uses: nick-invision/retry@v2
-        with:
-          timeout_minutes: 5
-          max_attempts: 5
-          command: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
 
       - name: Run PHP CS Fixer
         run: ${{ inputs.command }}
+
+      - name: Commit changes
+        if: ${{ inputs.auto_commit }}
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: ${{ inputs.commit_message }}
