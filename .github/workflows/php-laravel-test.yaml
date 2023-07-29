@@ -8,6 +8,20 @@ on:
         required: false
         type: string
         default: "dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, pdo_pgsql, gd, redis-phpredis/phpredis@5.3.7"
+      test_command:
+        type: string
+        required: false
+        default: "composer test"
+      coverage_path:
+        description: "The artifact path for coverage reports"
+        type: string
+        required: false
+        default: ".coverage"
+      coverage_artifact:
+        description: "The artifact name for coverage reports"
+        type: string
+        required: false
+        default: "code-coverage-report"
     secrets:
       packagist_username:
         required: true
@@ -40,10 +54,18 @@ jobs:
         with:
           php-version: "8.2"
           tools: composer, phpunit
-          coverage: none
+          coverage: pcov
           extensions: ${{ inputs.php_extensions }}
+
+      - name: Setup problem matchers for PHPUnit
+        run: echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
+
+      - name: Install composer dependencies
+        uses: ramsey/composer-install@v2
+        with:
+          composer-options: "--optimize-autoloader --prefer-dist"
         env:
-          COMPOSER_AUTH_JSON: |
+          COMPOSER_AUTH: |
             {
               "http-basic": {
                 "repo.packagist.com": {
@@ -52,28 +74,18 @@ jobs:
                 }
               }
             }
-      - name: Setup problem matchers for PHPUnit
-        run: echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
-      - name: Get composer cache directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
-      - name: Install dependencies
-        uses: nick-invision/retry@v2
-        with:
-          timeout_minutes: 5
-          max_attempts: 5
-          command: composer install --prefer-dist --no-interaction --no-progress
+
       - name: Execute tests
-        run: composer test
+        run: ${{ inputs.test_command }}
         env:
           DB_CONNECTION: pgsql
           DB_HOST: localhost
           DB_PORT: 5432
           DB_USERNAME: postgres
           DB_PASSWORD: postgres
+
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.coverage_artifact }}
+          path: ${{ inputs.coverage_path }}
