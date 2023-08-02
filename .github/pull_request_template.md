@@ -9,6 +9,10 @@
 ## Issue link
 <!-- Add a link to the issue -->
 
+## Sonar Test Coverage
+<!-- If your PR does not pass the SonarCloud Code Analysis, describe how that it is justified to not pass -->
+- [ ] SonarCloud Code Analysis for this pull request is passing
+
 ## Pre-review checklist
 
 If some steps are not applicable or in your judgment not necessary, remove and explain why rather than leave checkmarks blank.
