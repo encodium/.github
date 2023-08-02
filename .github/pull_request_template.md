@@ -10,7 +10,7 @@
 <!-- Add a link to the issue -->
 
 ## Sonar Test Coverage
-<!-- If your PR does not pass the SonarCloud Code Analysis, describe how that it is justified to not pass -->
+<!-- If your PR does not pass the SonarCloud Code Analysis, describe why it cannot pass before merging. -->
 - [ ] SonarCloud Code Analysis for this pull request is passing
 
 ## Pre-review checklist
