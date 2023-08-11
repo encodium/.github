@@ -1,41 +1,31 @@
 ## Description
-<!--- Describe your changes in detail -->
-<!--- Why is this change required? What problem does it solve? -->
+<!--
+short description or bulleted list of what the pull request contains
 
-## Testing information
-<!--- Please describe in detail how you tested your changes. -->
-<!--- This section should be through enough that reviewers can replicate the testing. -->
+**Related PRs:**
+- https://github.com/encodium/webstore/pull/1234
+- https://github.com/encodium/common/pull/4321
+-->
+**Jira Issue:** https://revolutionparts.atlassian.net/browse/<issue>
 
-## Issue link
-<!-- Add a link to the issue -->
+## Background
+<!--
+explain the _how_ and _why_ we need this
+- [relevant context]
+- [why you decided to change things]
+- [reason you're doing it now]
+-->
 
+## Testing Information
+<!--
+Please describe in detail how you tested your changes. Steps to Reproduce, etc.
+This section should be thorough enough that reviewers can replicate the testing.
+-->
+
+<!--
 ## Sonar Test Coverage
-<!-- If your PR does not pass the SonarCloud Code Analysis, describe why it cannot pass before merging. -->
-- [ ] SonarCloud Code Analysis for this pull request is passing
-
-## Pre-review checklist
-
-If some steps are not applicable or in your judgment not necessary, remove and explain why rather than leave checkmarks blank.
-
-- [ ] I've tested the code as an end user would and included appropriate testing steps 
-- [ ] For all new functionality, I have added thorough, applicable tests that validate my changes
-- [ ] For improvements to existing functionality, I've followed the [campsite rule](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git), leaving it a little better than I found it. 
-- [ ] The added feature contains necessary observability
-- [ ] I have made corresponding changes to the documentation
-
-## Review checklist
-- [ ] Review with peer on team.
-- [ ] Review with team 'merger' or on-duty merger. Details [here](https://github.com/encodium/.github-private/blob/main/profile/pages/dev-standards.md#git). 
-
-## Peer review checklist
-
-- [ ] Make sure the pre-review checklist has been completed.
-- [ ] I've run the code as an end user would.
-
-## Merger review checklist
-
-- [ ] Make sure the pre-review checklist has been completed.
-- [ ] I've run the code as an end user would.
-
-## Attachments
-<!-- This section is optional, but should be used to share items such as UI screenshots or test files, when applicable -->
+If your PR does not pass the SonarCloud Code Analysis, describe why it cannot pass before merging.
+-->
+<!--
+For more information about creating PRs: https://revolutionparts.slite.com/app/docs/wLef9fVzlT0MDA/Creating-Pull-Requests
+-->
