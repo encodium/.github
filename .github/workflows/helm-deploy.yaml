@@ -19,6 +19,11 @@ on:
         description: "Target environment for deployment (stg|prod)"
         required: true
         type: string
+      helm-wait:
+        description: "If set to 'atomic' will use --atomic enabling auto-rollback instead of --wait"
+        default: "wait"
+        required: true
+        type: string
     secrets:
       k8s_server:
         required: true
@@ -48,7 +53,11 @@ jobs:
           if [ ! -z "${{ inputs.values-file }}" ]; then
             ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
           fi
-          helm upgrade ${{ github.event.repository.name }} ./deployments --install --wait --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
+          WAIT_ARG="--wait"
+          if [ "${{ inputs.helm-wait }}" == "atomic" ]; then
+            WAIT_ARG="--atomic"
+          fi
+          helm upgrade ${{ github.event.repository.name }} ./deployments --install $WAIT_ARG --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
         uses: ncipollo/release-action@v1
