@@ -57,7 +57,7 @@ jobs:
           if [[ "${{ inputs.helm-wait }}" == "atomic" ]]; then
             WAIT_ARG="--atomic"
           fi
-          helm upgrade ${{ github.event.repository.name }} ./deployments --install $WAIT_ARG --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
+          helm upgrade ${{ github.event.repository.name }} ./deployments --install ${WAIT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
         uses: ncipollo/release-action@v1
