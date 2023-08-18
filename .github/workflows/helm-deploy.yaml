@@ -19,11 +19,11 @@ on:
         description: "Target environment for deployment (stg|prod)"
         required: true
         type: string
-      helm-wait:
-        description: "If set to 'atomic' will use --atomic enabling auto-rollback instead of --wait"
-        default: "wait"
+      atomic:
+        description: "If true, helm upgrade uses --atomic enabling auto-rollback upon failure"
+        default: false
         required: false
-        type: string
+        type: boolean
     secrets:
       k8s_server:
         required: true
@@ -54,7 +54,7 @@ jobs:
             ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
           fi
           WAIT_ARG="--wait"
-          if [[ "${{ inputs.helm-wait }}" == "atomic" ]]; then
+          if [[ "${{ inputs.atomic }}" == true ]]; then
             WAIT_ARG="--atomic"
           fi
           helm upgrade ${{ github.event.repository.name }} ./deployments --install ${WAIT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
