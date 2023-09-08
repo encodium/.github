@@ -45,7 +45,7 @@ jobs:
           if [ ! -z "${{ inputs.deployment }}" ]; then
             DEPLOYMENT="${{ inputs.deployment }}"
           fi
-          helm upgrade ${DEPLOYMENT} -n ${{ inputs.namespace }}
+          helm rollback ${DEPLOYMENT} -n ${{ inputs.namespace }}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
         uses: ncipollo/release-action@v1
