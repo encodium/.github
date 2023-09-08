@@ -8,7 +8,7 @@ on:
         default: api
         type: string
       environment:
-        description: "Target environment for deployment (stg|prod)"
+        description: "Target environment for rollback (stg|prod)"
         required: true
         type: string
       deployment:
