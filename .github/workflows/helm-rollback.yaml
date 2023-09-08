@@ -1,0 +1,57 @@
+name: Helm Rollback
+on:
+  workflow_call:
+    inputs:
+      namespace:
+        description: "Kubernetes namespace scope for this rollback"
+        required: false
+        default: api
+        type: string
+      environment:
+        description: "Target environment for rollback (stg|prod)"
+        required: true
+        type: string
+      deployment:
+        description: "Name of the deployment to rollback. Defaults to repo name."
+        required: false
+        type: string
+    secrets:
+      k8s_server:
+        required: true
+      k8s_token:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.image_tag }}
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+      - name: Setup Kubectl
+        uses: Azure/setup-kubectl@v3
+      - name: deploy
+        run: |
+          kubectl config set-cluster k8s --server="${{ secrets.k8s_server }}"
+          kubectl config set-credentials deploy --token="${{ secrets.k8s_token }}"
+          kubectl config set-context default --cluster=k8s --user=deploy
+          kubectl config use-context default
+          helm version
+          kubectl version
+          DEPLOYMENT="${{ github.event.repository.name }}"
+          if [ ! -z "${{ inputs.deployment }}" ]; then
+            DEPLOYMENT="${{ inputs.deployment }}"
+          fi
+          helm rollback ${DEPLOYMENT} -n ${{ inputs.namespace }}
+      - name: Update GitHub release
+        if: inputs.environment == 'prod'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.image_tag }}
+          name: Release ${{ inputs.image_tag }}
+          prerelease: false
+          allowUpdates: true
+          omitBodyDuringUpdate: true
