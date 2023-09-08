@@ -3,7 +3,7 @@ on:
   workflow_call:
     inputs:
       namespace:
-        description: "Kubernetes namespace to deploy resources in"
+        description: "Kubernetes namespace scope for this rollback"
         required: false
         default: api
         type: string
