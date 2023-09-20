@@ -2,6 +2,10 @@ name: Openapi Generate PHP Client
 on:
   workflow_call:
     inputs:
+      phpVersion:
+        required: false
+        type: string
+        default: "7.4"
       specLocation:
         description: The filepath to the openapi spec.
         required: false
@@ -94,7 +98,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 7.4
+          php-version: ${{ inputs.phpVersion }}
           tools: composer:v2
           coverage: none
       - name: Install dependencies
