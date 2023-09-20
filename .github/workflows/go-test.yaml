@@ -14,7 +14,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ~1.20.5
+          go-version: stable
           check-latest: true
       - name: Go mod cache
         id: go-cache
@@ -40,7 +40,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.51.2
+          version: latest
           skip-go-installation: true
           args: --print-issued-lines=true -c ./.golangci.yml --max-same-issues 0 -v --timeout 5m
       - name: Go Generate

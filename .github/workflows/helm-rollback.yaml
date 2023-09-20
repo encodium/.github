@@ -1,29 +1,20 @@
-name: Helm Deployment
+name: Helm Rollback
 on:
   workflow_call:
     inputs:
-      image_tag:
-        description: "Tag of docker image to deploy"
-        required: true
-        type: string
       namespace:
-        description: "Kubernetes namespace to deploy resources in"
+        description: "Kubernetes namespace scope for this rollback"
         required: false
         default: api
         type: string
-      values-file:
-        description: "Additional values.yaml file to include in deployment"
-        required: false
-        type: string
       environment:
-        description: "Target environment for deployment (stg|prod)"
+        description: "Target environment for rollback (stg|prod)"
         required: true
         type: string
-      atomic:
-        description: "If true, helm upgrade uses --atomic enabling auto-rollback upon failure"
-        default: false
+      deployment:
+        description: "Name of the deployment to rollback. Defaults to repo name."
         required: false
-        type: boolean
+        type: string
     secrets:
       k8s_server:
         required: true
@@ -50,14 +41,11 @@ jobs:
           kubectl config use-context default
           helm version
           kubectl version
-          if [ ! -z "${{ inputs.values-file }}" ]; then
-            ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
+          DEPLOYMENT="${{ github.event.repository.name }}"
+          if [ ! -z "${{ inputs.deployment }}" ]; then
+            DEPLOYMENT="${{ inputs.deployment }}"
           fi
-          WAIT_ARG="--wait"
-          if [[ "${{ inputs.atomic }}" == true ]]; then
-            WAIT_ARG="--atomic"
-          fi
-          helm upgrade ${{ github.event.repository.name }} ./deployments --install ${WAIT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
+          helm rollback ${DEPLOYMENT} -n ${{ inputs.namespace }}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
         uses: ncipollo/release-action@v1
