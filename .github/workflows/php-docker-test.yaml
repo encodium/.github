@@ -17,17 +17,12 @@ on:
         required: false
         type: string
         default: "./build/app/Dockerfile"
-      run_sonar:
-        type: boolean
-        required: false
-        default: false
     secrets:
       packagist_username:
         required: true
       packagist_password:
         required: true
-      sonar_token:
-        required: false
+
 jobs:
   php-test:
     name: PHP Docker Test
