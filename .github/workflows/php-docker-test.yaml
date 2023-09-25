@@ -22,6 +22,8 @@ on:
         required: true
       packagist_password:
         required: true
+      sonar_token:
+        required: true
 
 jobs:
   php-test:
@@ -81,7 +83,6 @@ jobs:
             ${{ runner.os }}-multi-buildx
       - name: Docker Build for testing
         uses: docker/build-push-action@v4
-
         with:
           context: .
           push: false
@@ -92,6 +93,8 @@ jobs:
           tags: "webstore_app:test"
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,mode=max,dest=/tmp/.buildx-cache-new
+      - name: See images
+        run: docker images
       - name: Docker compose pull
         run: docker compose --file docker-compose.test.yml --project-directory . pull
       - name: Docker compose up
