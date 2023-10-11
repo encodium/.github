@@ -25,9 +25,7 @@ on:
         required: false
         type: boolean
     secrets:
-      k8s_server:
-        required: true
-      k8s_token:
+      kubeconfig:
         required: true
 
 jobs:
@@ -44,19 +42,20 @@ jobs:
         uses: Azure/setup-kubectl@v3
       - name: deploy
         run: |
-          kubectl config set-cluster k8s --server="${{ secrets.k8s_server }}"
-          kubectl config set-credentials deploy --token="${{ secrets.k8s_token }}"
-          kubectl config set-context default --cluster=k8s --user=deploy
-          kubectl config use-context default
+          echo "${{ secrets.kubeconfig }}" >> kube.config
+          export KUBECONFIG=./kube.config
           helm version
           kubectl version
+
           if [ ! -z "${{ inputs.values-file }}" ]; then
             ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
           fi
+
           WAIT_ARG="--wait"
           if [[ "${{ inputs.atomic }}" == true ]]; then
             WAIT_ARG="--atomic"
           fi
+
           helm upgrade ${{ github.event.repository.name }} ./deployments --install ${WAIT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
