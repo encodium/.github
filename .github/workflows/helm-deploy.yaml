@@ -24,6 +24,11 @@ on:
         default: false
         required: false
         type: boolean
+      helm_version:
+        description: "Option to override helm version. (i.e. 'v3.6.3')"
+        default: "v3.13.1"
+        required: false
+        type: string
     secrets:
       k8s_server:
         required: true
@@ -40,6 +45,8 @@ jobs:
           ref: ${{ inputs.image_tag }}
       - name: Setup Helm
         uses: azure/setup-helm@v3
+        with:
+          version: ${{ inputs.helm_version }}
       - name: Setup Kubectl
         uses: Azure/setup-kubectl@v3
       - name: deploy
