@@ -28,6 +28,8 @@ jobs:
               "name": "${{ github.event.repository.name }} deployment of ${{ inputs.image_tag }} to ${{ inputs.environment }} complete",
               "deployed_at": "${{ env.TIMESTAMP_NOW }}",
               "repo_name": "${{ github.repository }}",
-              "commit_shas": ["${{ github.sha }}"]
+              "commit_shas": ["${{ github.sha }}"],
+              "source_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "is_successful": true
             }' \
             https://webhooks.jellyfish.co/deployment
