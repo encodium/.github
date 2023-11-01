@@ -74,3 +74,9 @@ jobs:
           prerelease: false
           allowUpdates: true
           omitBodyDuringUpdate: true
+      - name: Jellyfish Deploy Notification
+        if: inputs.environment == 'prod'
+        uses: encodium/.github/.github/workflows/jellyfish-deploy-notification.yaml@main
+        with:
+          environment: "${{ inputs.environment }}"
+          image_tag: "${{ inputs.image_tag }}"
