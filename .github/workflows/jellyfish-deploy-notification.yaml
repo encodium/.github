@@ -8,28 +8,26 @@ on:
       image_tag:
         type: string
         required: true
+    secrets:
+      jellyfish_api_token:
+        required: true
 
 jobs:
-  get_date:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dynamically set environment variable
-        run: echo TIMESTAMP_NOW=$(date --iso-8601=seconds) >> $GITHUB_ENV
-
   notify-jellyfish:
-    needs: get_date
     runs-on: ubuntu-latest
     steps:
-    - name: Notify Jellyfish of deployment
-      run: |
-        curl -i -X POST \
-          -H 'Content-Type: application/json' \
-          -H 'X-jf-api-token: ${{ secrets.JELLYFISH_API_TOKEN }}' \
-          -d '{
-            "reference_id": "${{ github.event.repository.name }}-${{ inputs.image_tag }}-${{ github.run_id }}",
-            "name": "${{ github.event.repository.name }} deployment of ${{ inputs.image_tag }} to ${{ inputs.environment }} complete",
-            "deployed_at": "${{ env.TIMESTAMP_NOW }}",
-            "repo_name": "${{ github.repository }}",
-            "commit_shas": ["${{ github.sha }}"]
-          }' \
-          https://webhooks.jellyfish.co/deployment
+      - name: Dynamically set timestamp var
+        run: echo TIMESTAMP_NOW=$(date --iso-8601=seconds) >> $GITHUB_ENV
+      - name: Notify Jellyfish of deployment
+        run: |
+          curl -i -X POST \
+            -H 'Content-Type: application/json' \
+            -H 'X-jf-api-token: ${{ secrets.jellyfish_api_token }}' \
+            -d '{
+              "reference_id": "${{ github.event.repository.name }}-${{ inputs.image_tag }}-${{ github.run_id }}",
+              "name": "${{ github.event.repository.name }} deployment of ${{ inputs.image_tag }} to ${{ inputs.environment }} complete",
+              "deployed_at": "${{ env.TIMESTAMP_NOW }}",
+              "repo_name": "${{ github.repository }}",
+              "commit_shas": ["${{ github.sha }}"]
+            }' \
+            https://webhooks.jellyfish.co/deployment

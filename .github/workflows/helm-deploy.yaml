@@ -29,6 +29,16 @@ on:
         default: "v3.13.1"
         required: false
         type: string
+      release_name:
+        description: "Option to override helm release name. (i.e. 'internal-api')"
+        default: ""
+        required: false
+        type: string
+      timeout:
+        description: "Timeout for helm upgrade"
+        default: "5m"
+        required: false
+        type: string
     secrets:
       k8s_server:
         required: true
@@ -57,14 +67,27 @@ jobs:
           kubectl config use-context default
           helm version
           kubectl version
+
           if [ ! -z "${{ inputs.values-file }}" ]; then
             ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
           fi
+
           WAIT_ARG="--wait"
           if [[ "${{ inputs.atomic }}" == true ]]; then
             WAIT_ARG="--atomic"
           fi
-          helm upgrade ${{ github.event.repository.name }} ./deployments --install ${WAIT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
+
+          TIMEOUT_ARG=""
+          if [[ ! -z "${{ inputs.timeout }}" ]]; then
+            TIMEOUT_ARG="--timeout ${{ inputs.timeout }}"
+          fi
+
+          RELEASE_NAME="${{ github.event.repository.name }}"
+          if [ ! -z "${{ inputs.release_name }}" ]; then
+            RELEASE_NAME="-f ${{ inputs.release_name }}"
+          fi
+
+          helm upgrade ${RELEASE_NAME} ./deployments --install ${WAIT_ARG} ${TIMEOUT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
         uses: ncipollo/release-action@v1
@@ -74,20 +97,3 @@ jobs:
           prerelease: false
           allowUpdates: true
           omitBodyDuringUpdate: true
-      - name: Dynamically set environment variable
-        if: inputs.environment == 'prod'
-        run: echo TIMESTAMP_NOW=$(date --iso-8601=seconds) >> $GITHUB_ENV
-      - name: Notify Jellyfish of deployment
-        if: inputs.environment == 'prod'
-        run: |
-          curl -i -X POST \
-            -H 'Content-Type: application/json' \
-            -H 'X-jf-api-token: ${{ secrets.JELLYFISH_API_TOKEN }}' \
-            -d '{
-              "reference_id": "${{ github.event.repository.name }}-${{ inputs.image_tag }}-${{ github.run_id }}",
-              "name": "${{ github.event.repository.name }} deployment of ${{ inputs.image_tag }} to ${{ inputs.environment }} complete",
-              "deployed_at": "${{ env.TIMESTAMP_NOW }}",
-              "repo_name": "${{ github.repository }}",
-              "commit_shas": ["${{ github.sha }}"]
-            }' \
-            https://webhooks.jellyfish.co/deployment
