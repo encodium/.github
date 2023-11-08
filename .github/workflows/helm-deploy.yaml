@@ -39,6 +39,10 @@ on:
         default: "5m"
         required: false
         type: string
+      additional-values-file:
+        description: "Extra additional values.yaml file to include in deployment"
+        required: false
+        type: string
     secrets:
       k8s_server:
         required: true
@@ -70,6 +74,10 @@ jobs:
 
           if [ ! -z "${{ inputs.values-file }}" ]; then
             ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
+          fi
+
+          if [ ! -z "${{ inputs.additional-values-file }}" ]; then
+            ARG_VALUES_FILE="${ARG_VALUES_FILE} -f ${{ inputs.additional-values-file }}"
           fi
 
           WAIT_ARG="--wait"
