@@ -1,4 +1,5 @@
-# Determine if a given branch exists in a repository
+# Determine if a given branch exists in a repository.
+#
 # Returns the following outputs:
 #  branch: the name of the branch or empty if not found
 #  found: indicates if the branch exists (true or false)
