@@ -75,6 +75,6 @@ jobs:
           echo "Found: ${found}"
 
           echo "branch=${branch_name}" >> "$GITHUB_OUTPUT"
-          echo "found=${found}" >> "$GITHUB_OUTPUT"
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
           echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
+          echo "found=${found}" >> "$GITHUB_OUTPUT"
