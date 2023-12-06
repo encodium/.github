@@ -16,6 +16,10 @@ on:
         type: string
         required: false
         default: "composer test"
+      run_docker:
+        type: boolean
+        required: false
+        default: false
       run_sonar:
         type: boolean
         required: false
@@ -28,6 +32,14 @@ on:
         type: string
         required: false
         default: "phpunit-code-coverage-report"
+      health_check_command:
+        type: string
+        required: false
+        default: null
+      health_check_timeout:
+        type: number
+        required: false
+        default: 300
     secrets:
       packagist_username:
         required: true
@@ -80,6 +92,21 @@ jobs:
           timeout_minutes: 5
           max_attempts: 5
           command: composer install --prefer-dist --no-interaction --no-progress
+      - name: Docker compose pull
+        if: ${{ inputs.run_docker }}
+        run: docker compose --project-directory . pull
+      - name: Docker compose up
+        if: ${{ inputs.run_docker }}
+        run: docker compose --project-directory . up --build -d
+      - name: Wait for docker container to be ready
+        if: ${{ inputs.run_docker }}
+        run: |
+          timeout=${{ inputs.health_check_timeout }}
+          until [ $timeout -eq 0 ] || ${{ inputs.health_check_command }}; do
+            sleep 5
+            timeout=$((timeout-5))
+          done
+          [ $timeout -gt 0 ]
       - name: Execute tests
         run: |
           ${{ inputs.test_command }}
