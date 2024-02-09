@@ -40,7 +40,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: latest
+          version: 1.55.2
           skip-go-installation: true
           args: --print-issued-lines=true -c ./.golangci.yml --max-same-issues 0 -v --timeout 5m
       - name: Go Generate
