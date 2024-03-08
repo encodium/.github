@@ -1,0 +1,107 @@
+name: Helm Deployment
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Tag of docker image to deploy"
+        required: true
+        type: string
+      namespace:
+        description: "Kubernetes namespace to deploy resources in"
+        required: false
+        default: api
+        type: string
+      values-file:
+        description: "Additional values.yaml file to include in deployment"
+        required: false
+        type: string
+      environment:
+        description: "Target environment for deployment (stg|prod)"
+        required: true
+        type: string
+      atomic:
+        description: "If true, helm upgrade uses --atomic enabling auto-rollback upon failure"
+        default: false
+        required: false
+        type: boolean
+      release_name:
+        description: "Option to override helm release name. (i.e. 'internal-api')"
+        default: ""
+        required: false
+        type: string
+      timeout:
+        description: "Timeout for helm upgrade"
+        default: "5m"
+        required: false
+        type: string
+      additional-values-file:
+        description: "Extra additional values.yaml file to include in deployment"
+        required: false
+        type: string
+    secrets:
+      kubeconfig:
+        required: true
+      aws_access_id:
+        required: true
+      aws_access_secret:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.image_tag }}
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_id }}
+          aws-secret-access-key: ${{ secrets.aws_access_secret }}
+          aws-region: us-east-1
+          role-duration-seconds: 1200
+          role-session-name: GithubActions-${{ github.event.repository.name }}
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+      - name: Setup Kubectl
+        uses: Azure/setup-kubectl@v3
+      - name: deploy
+        run: |
+          echo "${{ secrets.kubeconfig }}" >> kube.config
+          export KUBECONFIG=./kube.config
+          helm version
+          kubectl version
+
+          if [ ! -z "${{ inputs.values-file }}" ]; then
+            ARG_VALUES_FILE="-f ${{ inputs.values-file }}"
+          fi
+
+          if [ ! -z "${{ inputs.additional-values-file }}" ]; then
+            ARG_VALUES_FILE="${ARG_VALUES_FILE} -f ${{ inputs.additional-values-file }}"
+          fi
+
+          WAIT_ARG="--wait"
+          if [[ "${{ inputs.atomic }}" == true ]]; then
+            WAIT_ARG="--atomic"
+          fi
+
+          TIMEOUT_ARG=""
+          if [[ ! -z "${{ inputs.timeout }}" ]]; then
+            TIMEOUT_ARG="--timeout ${{ inputs.timeout }}"
+          fi
+
+          RELEASE_NAME="${{ github.event.repository.name }}"
+          if [ ! -z "${{ inputs.release_name }}" ]; then
+            RELEASE_NAME="${{ inputs.release_name }}"
+          fi
+          helm upgrade ${RELEASE_NAME} ./deployments --install ${WAIT_ARG} ${TIMEOUT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
+      - name: Update GitHub release
+        if: inputs.environment == 'prod'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.image_tag }}
+          name: Release ${{ inputs.image_tag }}
+          prerelease: false
+          allowUpdates: true
+          omitBodyDuringUpdate: true
