@@ -1,0 +1,62 @@
+name: PHP Common Bump
+on:
+  workflow_call:
+    inputs:
+      php_version:
+        required: false
+        type: string
+        default: "7.4"
+      commit_message:
+        required: false
+        type: string
+        default: "chore: common bump"
+    secrets:
+      packagist_username:
+        required: true
+      packagist_password:
+        required: true
+
+jobs:
+  upgrade-common:
+    name: Upgrade Common
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php_version }}
+          tools: composer:v2
+          coverage: none
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      - name: Install dependencies
+        env:
+          COMPOSER_AUTH: '{"http-basic": {"repo.packagist.com": {"username": "${{ secrets.packagist_username }}", "password": "${{secrets.packagist_password}}"}}}'
+        uses: nick-invision/retry@v1
+        with:
+          timeout_minutes: 5
+          max_attempts: 5
+          command: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
+      - name: Update Common
+        env:
+          COMPOSER_AUTH: '{"http-basic": {"repo.packagist.com": {"username": "${{ secrets.packagist_username }}", "password": "${{secrets.packagist_password}}"}}}'
+        uses: nick-invision/retry@v1
+        with:
+          timeout_minutes: 5
+          max_attempts: 5
+          command: composer update revolutionparts/common --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
+      - name: Commit Common Bump
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git commit -am ""${{ inputs.commit_message }}"
+          git push origin main
