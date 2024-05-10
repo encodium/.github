@@ -58,5 +58,5 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git commit -am ""${{ inputs.commit_message }}"
+          git commit -am "${{ inputs.commit_message }}"
           git push origin main
