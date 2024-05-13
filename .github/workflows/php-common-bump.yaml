@@ -62,5 +62,5 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git commit -am "${{ inputs.commit_message }} [skip actions]" || exit 0
+          git diff-index --quiet HEAD || git commit -am "${{ inputs.commit_message }} [skip actions]"
           git push origin main
