@@ -11,6 +11,8 @@ on:
         type: string
         default: "chore: common bump"
     secrets:
+      github_token:
+        required: true
       packagist_username:
         required: true
       packagist_password:
@@ -23,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: "${{ secrets.github_token }}"
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
