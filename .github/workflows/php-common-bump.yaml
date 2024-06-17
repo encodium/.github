@@ -57,7 +57,7 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 5
-          command: composer update revolutionparts/common --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
+          command: composer require revolutionparts/common --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
       - name: Commit Common Bump
         run: |
           git config user.name github-actions
