@@ -96,12 +96,12 @@ jobs:
             RELEASE_NAME="${{ inputs.release_name }}"
           fi
           helm upgrade -i ${RELEASE_NAME} ./deployments --install ${WAIT_ARG} ${TIMEOUT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
-      # - name: Update GitHub release
-      #   if: inputs.environment == 'prod'
-      #   uses: ncipollo/release-action@v1
-      #   with:
-      #     tag: ${{ inputs.image_tag }}
-      #     name: Release ${{ inputs.image_tag }}
+      - name: Update GitHub release
+        if: inputs.environment == 'prod'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.image_tag }}
+          name: Release ${{ inputs.image_tag }}
       #     prerelease: false
       #     allowUpdates: true
       #     omitBodyDuringUpdate: true
