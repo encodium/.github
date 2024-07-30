@@ -95,7 +95,7 @@ jobs:
           if [ ! -z "${{ inputs.release_name }}" ]; then
             RELEASE_NAME="${{ inputs.release_name }}"
           fi
-          helm upgrade ${RELEASE_NAME} ./deployments --install ${WAIT_ARG} ${TIMEOUT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
+          helm upgrade -i ${RELEASE_NAME} ./deployments --install ${WAIT_ARG} ${TIMEOUT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
         uses: ncipollo/release-action@v1
