@@ -75,7 +75,8 @@ jobs:
 
       - name: phpstan errors artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
+          include-hidden-files: true
           name: ${{ inputs.artifact_name }}
           path: ${{ inputs.error_file }}

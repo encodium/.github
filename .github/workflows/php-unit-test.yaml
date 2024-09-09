@@ -86,8 +86,9 @@ jobs:
         env:
           COVERAGE_FILE: ${{ inputs.coverage_file }}
       - name: Archive code coverage results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
+          include-hidden-files: true
           name: ${{ inputs.coverage_artifact_name }}
           path: ${{ inputs.coverage_file }}
       - name: Fix code coverage paths
