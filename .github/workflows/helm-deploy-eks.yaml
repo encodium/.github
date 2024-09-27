@@ -1,4 +1,4 @@
-name: Helm Deployment
+name: Helm Deployment for EKS
 on:
   workflow_call:
     inputs:
