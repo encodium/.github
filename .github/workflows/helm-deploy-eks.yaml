@@ -102,6 +102,6 @@ jobs:
         with:
           tag: ${{ inputs.image_tag }}
           name: Release ${{ inputs.image_tag }}
-      #     prerelease: false
-      #     allowUpdates: true
-      #     omitBodyDuringUpdate: true
+          prerelease: false
+          allowUpdates: true
+          omitBodyDuringUpdate: true
