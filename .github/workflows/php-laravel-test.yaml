@@ -89,3 +89,4 @@ jobs:
         with:
           name: ${{ inputs.coverage_artifact }}
           path: ${{ inputs.coverage_path }}
+          include-hidden-files: true

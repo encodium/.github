@@ -79,3 +79,4 @@ jobs:
         with:
           name: ${{ inputs.artifact_name }}
           path: ${{ inputs.error_file }}
+          include-hidden-files: true

@@ -90,6 +90,7 @@ jobs:
         with:
           name: ${{ inputs.coverage_artifact_name }}
           path: ${{ inputs.coverage_file }}
+          include-hidden-files: true
       - name: Fix code coverage paths
         if: ${{ inputs.run_sonar }}
         run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' "${{ inputs.coverage_file }}"
