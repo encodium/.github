@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Remove Generated Files
         continue-on-error: true
         run: xargs -I{} rm -rf "{}" < .openapi-generator/FILES

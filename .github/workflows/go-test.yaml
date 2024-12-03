@@ -18,7 +18,7 @@ jobs:
           check-latest: true
       - name: Go mod cache
         id: go-cache
-        uses: actions/checkout@v4
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build

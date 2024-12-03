@@ -61,7 +61,7 @@ jobs:
         uses: ramsey/composer-install@v2
 
       - name: Cache PHPStan Results
-        uses: actions/checkout@v4
+        uses: actions/cache@v4
         with:
           path: ${{ inputs.cache_path }}
           key: "${{ runner.os }}-phpstan-${{ github.run_id }}" # always unique key - always writes a new cache
