@@ -38,7 +38,7 @@ jobs:
     name: PHPStan
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -61,7 +61,7 @@ jobs:
         uses: ramsey/composer-install@v2
 
       - name: Cache PHPStan Results
-        uses: actions/cache@v3
+        uses: actions/checkout@v4
         with:
           path: ${{ inputs.cache_path }}
           key: "${{ runner.os }}-phpstan-${{ github.run_id }}" # always unique key - always writes a new cache

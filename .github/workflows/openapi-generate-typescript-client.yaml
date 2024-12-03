@@ -108,7 +108,7 @@ jobs:
           message: "${{ steps.spec.outputs.title }} ${{ steps.spec.outputs.version }}"
           tag: ${{ steps.spec.outputs.version }}
       - name: Node Setup
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
       - run: npm install
       - run: npm run build
       - uses: JS-DevTools/npm-publish@v1

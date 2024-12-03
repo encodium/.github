@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Go mod cache
         id: go-cache
-        uses: actions/cache@v3
+        uses: actions/checkout@v4
         with:
           path: |
             ~/.cache/go-build
