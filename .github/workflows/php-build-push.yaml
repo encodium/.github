@@ -6,7 +6,7 @@ on:
       php_version:
         required: false
         type: string
-        default: "7.4"
+        default: "8.3"
       ref:
         description: "The ref used to build the image."
         required: false

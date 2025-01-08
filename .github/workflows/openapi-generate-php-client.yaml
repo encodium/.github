@@ -5,7 +5,7 @@ on:
       phpVersion:
         required: false
         type: string
-        default: "7.4"
+        default: "8.3"
       specLocation:
         description: The filepath to the openapi spec.
         required: false
