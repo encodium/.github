@@ -6,7 +6,7 @@ on:
       php_version:
         required: false
         type: string
-        default: "8.2"
+        default: "8.3"
       php_extensions:
         description: "Don't forget to add the default list if needed"
         required: false
