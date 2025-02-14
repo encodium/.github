@@ -2,6 +2,11 @@ name: PHP CS Fixer
 
 on:
   workflow_call:
+    inputs:
+      php_version:
+        required: false
+        type: string
+        default: "8.3"
 
 jobs:
   php-cs-fixer:
@@ -25,7 +30,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: ${{ inputs.php_version }}
 
       - name: Run PHP CS Fixer
         run: |
