@@ -60,11 +60,11 @@ jobs:
       - name: Install composer dependencies
         uses: ramsey/composer-install@v2
 
-      - name: Cache PHPStan Results
-        uses: actions/cache@v4
+      - name: Restore PHPStan Cache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ inputs.cache_path }}
-          key: "${{ runner.os }}-phpstan-${{ github.run_id }}" # always unique key - always writes a new cache
+          key: "${{ runner.os }}-phpstan-${{ github.run_id }}"
           restore-keys: |
             ${{ runner.os }}-phpstan-
 
@@ -72,9 +72,16 @@ jobs:
         run: ${{ inputs.command }}
         env:
           PHPSTAN_ERROR_FILE: ${{ inputs.error_file }}
+      
+      - name: Cache PHPStan Results
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ inputs.cache_path }}
+          key: "${{ runner.os }}-phpstan-${{ github.run_id }}"
 
       - name: phpstan errors artifact
-        if: ${{ always() }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
