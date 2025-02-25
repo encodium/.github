@@ -76,7 +76,7 @@ jobs:
         run: |
           php artisan config:cache --no-interaction
           php artisan route:cache --no-interaction
-          php artisan view:cache --no-interaction
+          test -d ./resources/views && php artisan view:cache --no-interaction
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
