@@ -86,16 +86,6 @@ jobs:
       - name: Run Docker Command
         if: ${{ inputs.docker_command != '' }}
         run: ${{ inputs.docker_command }}
-      - name: Wait for docker container to be ready
-        if: ${{ inputs.run_docker }}
-        run: |
-          timeout=${{ inputs.health_check_timeout }}
-          until [ $timeout -eq 0 ] || ${{ inputs.health_check_command }}; do
-            sleep 5
-            timeout=$((timeout-5))
-          done
-          [ $timeout -gt 0 ]
-
       - name: Execute tests
         run: ${{ inputs.test_command }}
         env:
