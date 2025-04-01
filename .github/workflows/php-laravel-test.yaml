@@ -26,6 +26,10 @@ on:
         type: string
         required: false
         default: "code-coverage-report"
+      docker_command:
+        type: string
+        required: false
+        default: ""
     secrets:
       packagist_username:
         required: true
@@ -78,7 +82,10 @@ jobs:
                 }
               }
             }
-
+      
+      - name: Run Docker Command
+        if: ${{ inputs.docker_command != '' }}
+        run: ${{ inputs.docker_command }}
       - name: Execute tests
         run: ${{ inputs.test_command }}
         env:
