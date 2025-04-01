@@ -16,10 +16,6 @@ on:
         type: string
         required: false
         default: "composer test"
-      run_docker:
-        type: boolean
-        required: false
-        default: false
       coverage_path:
         description: "The artifact path for coverage reports"
         type: string
@@ -30,14 +26,10 @@ on:
         type: string
         required: false
         default: "code-coverage-report"
-      health_check_command:
+      docker_command:
         type: string
         required: false
-        default: null
-      health_check_timeout:
-        type: number
-        required: false
-        default: 300
+        default: ""
     secrets:
       packagist_username:
         required: true
@@ -91,12 +83,9 @@ jobs:
               }
             }
       
-      - name: Docker compose pull
-        if: ${{ inputs.run_docker }}
-        run: docker compose --project-directory . pull
-      - name: Docker compose up
-        if: ${{ inputs.run_docker }}
-        run: docker compose --project-directory . up --build -d
+      - name: Run Docker Command
+        if: ${{ inputs.docker_command != '' }}
+        run: ${{ inputs.docker_command }}
       - name: Wait for docker container to be ready
         if: ${{ inputs.run_docker }}
         run: |
