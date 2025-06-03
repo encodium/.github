@@ -26,6 +26,11 @@ on:
         required: false
         type: string
         default: "./.phpstan.cache"
+      runs_on:
+        description: "The OS to run the job on"
+        required: false
+        type: string
+        default: "ubuntu-latest"
     secrets:
       packagist_username:
         required: true
@@ -34,7 +39,7 @@ on:
 
 jobs:
   phpstan:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     name: PHPStan
     steps:
       - name: Checkout code
