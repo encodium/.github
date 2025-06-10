@@ -13,6 +13,9 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   semantic-release:
@@ -26,6 +29,7 @@ jobs:
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           fetch_all_tags: true
       - name: Create a GitHub release
         uses: ncipollo/release-action@v1
