@@ -1,0 +1,74 @@
+name: Java Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        required: false
+        type: string
+        default: "8" 
+      build_command:
+        type: string
+        required: false
+        default: "mvn clean install -B"
+      test_command:
+        type: string
+        required: false
+        default: "mvn test -B"
+      coverage_file:
+        type: string
+        required: false
+        default: "target/site/jacoco/jacoco.xml"
+      coverage_artifact_name:
+        type: string
+        required: false
+        default: "junit-code-coverage-report"
+      run_sonar:
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      sonar_token:
+        required: false
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    name: JUnit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # better for Sonar reporting
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+          cache: maven
+
+      - name: Build with Maven
+        run: ${{ inputs.build_command }}
+
+      - name: Run Unit Tests
+        run: ${{ inputs.test_command }}
+
+      - name: Archive code coverage results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.coverage_artifact_name }}
+          path: ${{ inputs.coverage_file }}
+          include-hidden-files: true
+
+      - name: Fix code coverage paths
+        if: ${{ inputs.run_sonar }}
+        run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' "${{ inputs.coverage_file }}"
+
+      - name: SonarCloud Scan
+        if: ${{ inputs.run_sonar }}
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.sonar_token }}

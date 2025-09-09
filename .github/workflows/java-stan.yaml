@@ -1,0 +1,60 @@
+name: Java Static Analysis
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        required: false
+        type: string
+        default: "8"   
+      runs_on:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      artifact_name:
+        required: false
+        type: string
+        default: "spotbugs-report"
+      cache_path:
+        required: false
+        type: string
+        default: "~/.m2/repository"
+
+jobs:
+  static-analysis:
+    runs-on: ${{ inputs.runs_on }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+          cache: maven
+
+      - name: Cache Maven repo
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.cache_path }}
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build and run SpotBugs
+        run: mvn -B clean verify spotbugs:spotbugs
+
+      - name: Upload SpotBugs report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-xml
+          path: target/spotbugsXml.xml
+
+      - name: Upload SpotBugs report (HTML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-html
+          path: target/spotbugs.html

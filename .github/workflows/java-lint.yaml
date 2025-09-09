@@ -1,0 +1,42 @@
+name: Fix Java Code Style
+
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        required: false
+        type: string
+        default: "8"   
+
+permissions:
+  contents: write
+
+jobs:
+  java-format:
+    runs-on: ubuntu-latest
+    name: Java Spotless Autofix
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Run Spotless Apply
+        run: mvn spotless:apply
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore: fix java code style issues"
