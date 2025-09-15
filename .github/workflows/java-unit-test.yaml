@@ -6,7 +6,7 @@ on:
       java_version:
         required: false
         type: string
-        default: "8" 
+        default: "24"
       build_command:
         type: string
         required: false
