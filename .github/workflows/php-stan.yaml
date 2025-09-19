@@ -69,9 +69,10 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ inputs.cache_path }}
-          key: "${{ runner.os }}-phpstan-${{ github.run_id }}"
+          key: "${{ runner.os }}-phpstan-${{ github.repository }}-${{ github.run_id }}"
           restore-keys: |
-            ${{ runner.os }}-phpstan-
+            ${{ runner.os }}-phpstan-${{ github.repository }}-${{ github.ref_name }}
+            ${{ runner.os }}-phpstan-${{ github.repository }}-${{ github.event.repository.default_branch }}
 
       - name: Run PHPStan
         run: ${{ inputs.command }}
@@ -83,7 +84,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ inputs.cache_path }}
-          key: "${{ runner.os }}-phpstan-${{ github.run_id }}"
+          key: "${{ runner.os }}-phpstan-${{ github.repository }}-${{ github.run_id }}"
 
       - name: phpstan errors artifact
         if: always()
