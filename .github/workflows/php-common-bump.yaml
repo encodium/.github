@@ -10,6 +10,10 @@ on:
         required: false
         type: string
         default: "chore: common bump"
+      continue_on_error:
+        required: false
+        type: boolean
+        default: false
     secrets:
       write_pat:
         required: true
@@ -22,6 +26,7 @@ jobs:
   upgrade-common:
     name: Upgrade Common
     runs-on: ubuntu-latest
+    continue-on-error: ${{ inputs.continue_on_error }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
