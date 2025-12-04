@@ -41,7 +41,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          args: --print-issued-lines=true -c ./.golangci.yml --max-same-issues 0 -v --timeout 5m
+          args: --output.text.print-issued-lines -c ./.golangci.yml --max-same-issues 0 -v --timeout 5m
       - name: Go Generate
         run: go generate ./... && git diff --exit-code
       - name: Go Test
