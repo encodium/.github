@@ -17,6 +17,16 @@ on:
         required: false
         type: string
         default: "./build/Dockerfile-app"
+      build_cli_image:
+        description: "Whether to build the CLI image"
+        required: false
+        type: boolean
+        default: false
+      dockerfile_cli_path:
+        description: "Path to the CLI dockerfile you want to build"
+        required: false
+        type: string
+        default: "./build/Dockerfile-cli"
       dockerfile_webserver_path:
         description: "Path to the webserver (nginx) dockerfile you want to build"
         required: false
@@ -124,5 +134,33 @@ jobs:
           file: ${{ inputs.dockerfile_webserver_path }}
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+  build-and-push-cli-image:
+    if: ${{ inputs.build_cli_image }}
+    runs-on: ubuntu-latest
+    name: Build + Push CLI Image
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.gh_token }}
+      - name: Docker Build and Push
+        uses: docker/build-push-action@v5
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAME: ${{ github.repository }}
+        with:
+          context: .
+          push: true
+          file: ${{ inputs.dockerfile_cli_path }}
+          platforms: linux/amd64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cli-${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cli-latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
