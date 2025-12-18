@@ -232,7 +232,12 @@ jobs:
         if: steps.final-ticket.outputs.ticket != ''
         run: |
           VERIFY_TICKET="${{ inputs.verify-ticket-exists }}"
-          if [ "$VERIFY_TICKET" != "true" ]; then
+          # Default to true if not specified (for direct PR triggers or when default is used)
+          if [ -z "$VERIFY_TICKET" ]; then
+            VERIFY_TICKET="true"
+          fi
+          
+          if [ "$VERIFY_TICKET" = "false" ]; then
             echo "⚠️  Ticket verification is disabled, skipping API check"
             echo "exists=true" >> $GITHUB_OUTPUT
             exit 0
