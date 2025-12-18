@@ -1,0 +1,323 @@
+name: Jira Ticket Check
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_call:
+    inputs:
+      jira-project-pattern:
+        required: false
+        type: string
+        description: 'Regex pattern for Jira project keys (e.g., "DEVEX|DEV|PROJ")'
+        default: '[A-Z]+'
+      check-commits:
+        required: false
+        type: boolean
+        description: 'Whether to check commit messages for Jira tickets'
+        default: true
+      fail-on-missing:
+        required: false
+        type: boolean
+        description: 'Whether to fail the workflow if no Jira ticket is found'
+        default: true
+      verify-ticket-exists:
+        required: false
+        type: boolean
+        description: 'Whether to verify the ticket exists in Jira via API'
+        default: true
+      jira-instance:
+        required: false
+        type: string
+        description: 'Jira instance URL (e.g., revolutionparts.atlassian.net)'
+        default: 'revolutionparts.atlassian.net'
+    secrets:
+      jira-email:
+        required: false
+        description: 'Jira account email for API authentication'
+      jira-api-token:
+        required: false
+        description: 'Jira API token for authentication'
+
+jobs:
+  check-jira-ticket:
+    name: Verify Jira Ticket Link
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Jira ticket from branch name
+        id: branch-check
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
+          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
+            JIRA_PROJECT_PATTERN="[A-Z]+"
+          fi
+          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
+          
+          if [ -z "$BRANCH_NAME" ]; then
+            echo "ticket=" >> $GITHUB_OUTPUT
+            echo "found_in=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if echo "$BRANCH_NAME" | grep -qiE "$JIRA_PATTERN"; then
+            TICKET=$(echo "$BRANCH_NAME" | grep -oiE "$JIRA_PATTERN" | head -1)
+            echo "ticket=$TICKET" >> $GITHUB_OUTPUT
+            echo "found_in=branch" >> $GITHUB_OUTPUT
+            echo "✅ Found Jira ticket in branch name: $TICKET"
+            exit 0
+          fi
+          
+          echo "ticket=" >> $GITHUB_OUTPUT
+          echo "found_in=" >> $GITHUB_OUTPUT
+
+      - name: Extract Jira ticket from PR title
+        id: pr-title-check
+        if: steps.branch-check.outputs.ticket == ''
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
+          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
+            JIRA_PROJECT_PATTERN="[A-Z]+"
+          fi
+          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
+          
+          if [ -z "$PR_TITLE" ]; then
+            echo "ticket=" >> $GITHUB_OUTPUT
+            echo "found_in=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if echo "$PR_TITLE" | grep -qiE "$JIRA_PATTERN"; then
+            TICKET=$(echo "$PR_TITLE" | grep -oiE "$JIRA_PATTERN" | head -1)
+            echo "ticket=$TICKET" >> $GITHUB_OUTPUT
+            echo "found_in=pr_title" >> $GITHUB_OUTPUT
+            echo "✅ Found Jira ticket in PR title: $TICKET"
+            exit 0
+          fi
+          
+          echo "ticket=" >> $GITHUB_OUTPUT
+          echo "found_in=" >> $GITHUB_OUTPUT
+
+      - name: Extract Jira ticket from PR description
+        id: pr-description-check
+        if: steps.pr-title-check.outputs.ticket == ''
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
+          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
+            JIRA_PROJECT_PATTERN="[A-Z]+"
+          fi
+          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
+          
+          if [ -z "$PR_BODY" ]; then
+            echo "ticket=" >> $GITHUB_OUTPUT
+            echo "found_in=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for ticket in PR body/description
+          if echo "$PR_BODY" | grep -qiE "$JIRA_PATTERN"; then
+            TICKET=$(echo "$PR_BODY" | grep -oiE "$JIRA_PATTERN" | head -1)
+            echo "ticket=$TICKET" >> $GITHUB_OUTPUT
+            echo "found_in=pr_description" >> $GITHUB_OUTPUT
+            echo "✅ Found Jira ticket in PR description: $TICKET"
+            exit 0
+          fi
+          
+          echo "ticket=" >> $GITHUB_OUTPUT
+          echo "found_in=" >> $GITHUB_OUTPUT
+
+      - name: Extract Jira ticket from commits
+        id: commit-check
+        if: steps.pr-description-check.outputs.ticket == ''
+        run: |
+          CHECK_COMMITS="${{ inputs.check-commits }}"
+          if [ "$CHECK_COMMITS" != "true" ]; then
+            echo "ticket=" >> $GITHUB_OUTPUT
+            echo "found_in=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
+          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
+            JIRA_PROJECT_PATTERN="[A-Z]+"
+          fi
+          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
+            echo "ticket=" >> $GITHUB_OUTPUT
+            echo "found_in=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Get all commit messages between base and head
+          COMMIT_MESSAGES=$(git log --pretty=format:"%s" ${BASE_SHA}..${HEAD_SHA} 2>/dev/null || echo "")
+          
+          if [ -n "$COMMIT_MESSAGES" ] && echo "$COMMIT_MESSAGES" | grep -qiE "$JIRA_PATTERN"; then
+            TICKET=$(echo "$COMMIT_MESSAGES" | grep -oiE "$JIRA_PATTERN" | head -1)
+            echo "ticket=$TICKET" >> $GITHUB_OUTPUT
+            echo "found_in=commits" >> $GITHUB_OUTPUT
+            echo "✅ Found Jira ticket in commit messages: $TICKET"
+            exit 0
+          fi
+          
+          echo "ticket=" >> $GITHUB_OUTPUT
+          echo "found_in=" >> $GITHUB_OUTPUT
+
+      - name: Determine final ticket
+        id: final-ticket
+        run: |
+          if [ -n "${{ steps.branch-check.outputs.ticket }}" ]; then
+            echo "ticket=${{ steps.branch-check.outputs.ticket }}" >> $GITHUB_OUTPUT
+            echo "found_in=${{ steps.branch-check.outputs.found_in }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ steps.pr-title-check.outputs.ticket }}" ]; then
+            echo "ticket=${{ steps.pr-title-check.outputs.ticket }}" >> $GITHUB_OUTPUT
+            echo "found_in=${{ steps.pr-title-check.outputs.found_in }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ steps.pr-description-check.outputs.ticket }}" ]; then
+            echo "ticket=${{ steps.pr-description-check.outputs.ticket }}" >> $GITHUB_OUTPUT
+            echo "found_in=${{ steps.pr-description-check.outputs.found_in }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ steps.commit-check.outputs.ticket }}" ]; then
+            echo "ticket=${{ steps.commit-check.outputs.ticket }}" >> $GITHUB_OUTPUT
+            echo "found_in=${{ steps.commit-check.outputs.found_in }}" >> $GITHUB_OUTPUT
+          else
+            echo "ticket=" >> $GITHUB_OUTPUT
+            echo "found_in=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fail if no Jira ticket found
+        if: steps.final-ticket.outputs.ticket == ''
+        run: |
+          FAIL_ON_MISSING="${{ inputs.fail-on-missing }}"
+          if [ "$FAIL_ON_MISSING" != "true" ] && [ -n "$FAIL_ON_MISSING" ]; then
+            echo "⚠️  No Jira ticket found, but fail-on-missing is disabled"
+            exit 0
+          fi
+          
+          # Default to true if not specified (for direct PR triggers)
+          if [ -z "$FAIL_ON_MISSING" ]; then
+            FAIL_ON_MISSING="true"
+          fi
+          
+          if [ "$FAIL_ON_MISSING" != "true" ]; then
+            exit 0
+          fi
+          
+          echo "❌ No Jira ticket found in branch name, PR title, PR description"
+          CHECK_COMMITS="${{ inputs.check-commits }}"
+          if [ "$CHECK_COMMITS" == "true" ]; then
+            echo "   or commit messages."
+          else
+            echo "."
+          fi
+          echo ""
+          echo "Please ensure one of the following contains a Jira ticket key (e.g., DEVEX-600, DEV-123):"
+          echo "  - Branch name: ${{ github.head_ref }}"
+          echo "  - PR title: ${{ github.event.pull_request.title }}"
+          echo "  - PR description"
+          if [ "$CHECK_COMMITS" == "true" ]; then
+            echo "  - Commit messages"
+          fi
+          echo ""
+          echo "Jira ticket format: [PROJECT-KEY]-[NUMBER] (e.g., DEVEX-600)"
+          exit 1
+
+      - name: Verify ticket exists in Jira
+        id: verify-ticket
+        if: steps.final-ticket.outputs.ticket != ''
+        run: |
+          VERIFY_TICKET="${{ inputs.verify-ticket-exists }}"
+          if [ "$VERIFY_TICKET" != "true" ]; then
+            echo "⚠️  Ticket verification is disabled, skipping API check"
+            echo "exists=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          JIRA_EMAIL="${{ secrets.jira-email }}"
+          JIRA_TOKEN="${{ secrets.jira-api-token }}"
+          
+          if [ -z "$JIRA_EMAIL" ] || [ -z "$JIRA_TOKEN" ]; then
+            echo "⚠️  Jira credentials not provided, skipping ticket verification"
+            echo "⚠️  To enable verification, provide jira-email and jira-api-token secrets"
+            echo "exists=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          TICKET="${{ steps.final-ticket.outputs.ticket }}"
+          JIRA_INSTANCE="${{ inputs.jira-instance }}"
+          if [ -z "$JIRA_INSTANCE" ]; then
+            JIRA_INSTANCE="revolutionparts.atlassian.net"
+          fi
+          
+          # Create base64 encoded credentials
+          AUTH_STRING=$(echo -n "${JIRA_EMAIL}:${JIRA_TOKEN}" | base64)
+          
+          echo "🔍 Verifying ticket $TICKET exists in Jira..."
+          
+          # Make API request to check if ticket exists
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET \
+            -H "Authorization: Basic ${AUTH_STRING}" \
+            -H "Accept: application/json" \
+            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Ticket $TICKET exists in Jira"
+            echo "exists=true" >> $GITHUB_OUTPUT
+            # Extract ticket title if available
+            TITLE=$(echo "$BODY" | grep -o '"summary":"[^"]*' | head -1 | cut -d'"' -f4 || echo "")
+            if [ -n "$TITLE" ]; then
+              echo "   Title: $TITLE"
+            fi
+          elif [ "$HTTP_CODE" = "404" ]; then
+            echo "❌ Ticket $TICKET does not exist in Jira"
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 1
+          elif [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "⚠️  Authentication failed or insufficient permissions to verify ticket"
+            echo "⚠️  HTTP Status: $HTTP_CODE"
+            echo "⚠️  Continuing without verification..."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Unexpected response from Jira API"
+            echo "⚠️  HTTP Status: $HTTP_CODE"
+            echo "⚠️  Response: $BODY"
+            echo "⚠️  Continuing without verification..."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fail if ticket does not exist
+        if: steps.final-ticket.outputs.ticket != '' && steps.verify-ticket.outputs.exists == 'false'
+        run: |
+          TICKET="${{ steps.final-ticket.outputs.ticket }}"
+          JIRA_INSTANCE="${{ inputs.jira-instance }}"
+          if [ -z "$JIRA_INSTANCE" ]; then
+            JIRA_INSTANCE="revolutionparts.atlassian.net"
+          fi
+          echo "❌ Jira ticket $TICKET does not exist in Jira"
+          echo ""
+          echo "The ticket key was found in your PR, but it does not exist in Jira."
+          echo "Please ensure you're using a valid Jira ticket key."
+          echo ""
+          echo "Link: https://${JIRA_INSTANCE}/browse/$TICKET"
+          exit 1
+
+      - name: Success message
+        if: steps.final-ticket.outputs.ticket != '' && (steps.verify-ticket.outputs.exists == 'true' || steps.verify-ticket.outputs.exists == '')
+        run: |
+          TICKET="${{ steps.final-ticket.outputs.ticket }}"
+          JIRA_INSTANCE="${{ inputs.jira-instance }}"
+          if [ -z "$JIRA_INSTANCE" ]; then
+            JIRA_INSTANCE="revolutionparts.atlassian.net"
+          fi
+          echo "✅ Jira ticket found: $TICKET"
+          echo "   Found in: ${{ steps.final-ticket.outputs.found_in }}"
+          echo "   Link: https://${JIRA_INSTANCE}/browse/$TICKET"
