@@ -53,7 +53,11 @@ jobs:
           BRANCH_NAME="${{ github.head_ref }}"
           JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
           if [ -z "$JIRA_PROJECT_PATTERN" ]; then
-            JIRA_PROJECT_PATTERN="[A-Z]+"
+            JIRA_PROJECT_PATTERN="[A-Za-z]+"
+          else
+            # Make pattern case-insensitive by adding both cases if it's a simple pattern
+            # For complex patterns, rely on grep -i flag
+            JIRA_PROJECT_PATTERN=$(echo "$JIRA_PROJECT_PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
           fi
           JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
           
@@ -63,8 +67,11 @@ jobs:
             exit 0
           fi
           
+          # Case-insensitive search
           if echo "$BRANCH_NAME" | grep -qiE "$JIRA_PATTERN"; then
             TICKET=$(echo "$BRANCH_NAME" | grep -oiE "$JIRA_PATTERN" | head -1)
+            # Normalize to uppercase for Jira API (Jira ticket keys are uppercase)
+            TICKET=$(echo "$TICKET" | tr '[:lower:]' '[:upper:]')
             echo "ticket=$TICKET" >> $GITHUB_OUTPUT
             echo "found_in=branch" >> $GITHUB_OUTPUT
             echo "✅ Found Jira ticket in branch name: $TICKET"
@@ -81,7 +88,11 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
           if [ -z "$JIRA_PROJECT_PATTERN" ]; then
-            JIRA_PROJECT_PATTERN="[A-Z]+"
+            JIRA_PROJECT_PATTERN="[A-Za-z]+"
+          else
+            # Make pattern case-insensitive by adding both cases if it's a simple pattern
+            # For complex patterns, rely on grep -i flag
+            JIRA_PROJECT_PATTERN=$(echo "$JIRA_PROJECT_PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
           fi
           JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
           
@@ -91,8 +102,11 @@ jobs:
             exit 0
           fi
           
+          # Case-insensitive search
           if echo "$PR_TITLE" | grep -qiE "$JIRA_PATTERN"; then
             TICKET=$(echo "$PR_TITLE" | grep -oiE "$JIRA_PATTERN" | head -1)
+            # Normalize to uppercase for Jira API (Jira ticket keys are uppercase)
+            TICKET=$(echo "$TICKET" | tr '[:lower:]' '[:upper:]')
             echo "ticket=$TICKET" >> $GITHUB_OUTPUT
             echo "found_in=pr_title" >> $GITHUB_OUTPUT
             echo "✅ Found Jira ticket in PR title: $TICKET"
@@ -102,9 +116,44 @@ jobs:
           echo "ticket=" >> $GITHUB_OUTPUT
           echo "found_in=" >> $GITHUB_OUTPUT
 
+      - name: Extract Jira ticket from PR description
+        id: pr-description-check
+        if: steps.pr-title-check.outputs.ticket == ''
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
+          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
+            JIRA_PROJECT_PATTERN="[A-Za-z]+"
+          else
+            # Make pattern case-insensitive by adding both cases if it's a simple pattern
+            # For complex patterns, rely on grep -i flag
+            JIRA_PROJECT_PATTERN=$(echo "$JIRA_PROJECT_PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
+          fi
+          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
+          
+          if [ -z "$PR_BODY" ]; then
+            echo "ticket=" >> $GITHUB_OUTPUT
+            echo "found_in=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Case-insensitive search
+          if echo "$PR_BODY" | grep -qiE "$JIRA_PATTERN"; then
+            TICKET=$(echo "$PR_BODY" | grep -oiE "$JIRA_PATTERN" | head -1)
+            # Normalize to uppercase for Jira API (Jira ticket keys are uppercase)
+            TICKET=$(echo "$TICKET" | tr '[:lower:]' '[:upper:]')
+            echo "ticket=$TICKET" >> $GITHUB_OUTPUT
+            echo "found_in=pr_description" >> $GITHUB_OUTPUT
+            echo "✅ Found Jira ticket in PR description: $TICKET"
+            exit 0
+          fi
+          
+          echo "ticket=" >> $GITHUB_OUTPUT
+          echo "found_in=" >> $GITHUB_OUTPUT
+
       - name: Extract Jira ticket from commits
         id: commit-check
-        if: steps.pr-title-check.outputs.ticket == ''
+        if: steps.pr-description-check.outputs.ticket == ''
         run: |
           CHECK_COMMITS="${{ inputs.check-commits }}"
           if [ "$CHECK_COMMITS" != "true" ]; then
@@ -130,8 +179,11 @@ jobs:
           # Get all commit messages between base and head
           COMMIT_MESSAGES=$(git log --pretty=format:"%s" ${BASE_SHA}..${HEAD_SHA} 2>/dev/null || echo "")
           
+          # Case-insensitive search
           if [ -n "$COMMIT_MESSAGES" ] && echo "$COMMIT_MESSAGES" | grep -qiE "$JIRA_PATTERN"; then
             TICKET=$(echo "$COMMIT_MESSAGES" | grep -oiE "$JIRA_PATTERN" | head -1)
+            # Normalize to uppercase for Jira API (Jira ticket keys are uppercase)
+            TICKET=$(echo "$TICKET" | tr '[:lower:]' '[:upper:]')
             echo "ticket=$TICKET" >> $GITHUB_OUTPUT
             echo "found_in=commits" >> $GITHUB_OUTPUT
             echo "✅ Found Jira ticket in commit messages: $TICKET"
@@ -248,10 +300,50 @@ jobs:
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Ticket $TICKET exists in Jira"
             echo "exists=true" >> $GITHUB_OUTPUT
+            
             # Extract ticket title if available
             TITLE=$(echo "$BODY" | grep -o '"summary":"[^"]*' | head -1 | cut -d'"' -f4 || echo "")
+            
+            # Extract status from Jira API response (status is nested: fields.status.name)
+            # Try using jq first (if available), then fall back to grep/sed
+            if command -v jq >/dev/null 2>&1; then
+              STATUS=$(echo "$BODY" | jq -r '.fields.status.name // empty' 2>/dev/null || echo "")
+            fi
+            
+            if [ -z "$STATUS" ]; then
+              # Fallback: extract status using grep/sed pattern matching
+              # Look for "status" object followed by "name" field
+              STATUS=$(echo "$BODY" | grep -o '"status"[^}]*"name":"[^"]*' | sed 's/.*"name":"\([^"]*\)".*/\1/' | head -1 || echo "")
+            fi
+            
+            if [ -z "$STATUS" ]; then
+              # Alternative: look for any "name" field that appears after "status" in the JSON
+              STATUS=$(echo "$BODY" | sed -n 's/.*"status"[^}]*"name":"\([^"]*\)".*/\1/p' | head -1 || echo "")
+            fi
+            
+            # Normalize status to lowercase for comparison
+            STATUS_LOWER=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
+            
+            # Check if status is in the list of invalid statuses
+            INVALID_STATUSES="backlog|open|closed|done|ready to release"
+            if echo "$STATUS_LOWER" | grep -qiE "($INVALID_STATUSES)"; then
+              echo "❌ Ticket $TICKET is in an invalid status: $STATUS"
+              echo ""
+              echo "Tickets in the following statuses cannot have work logged against them:"
+              echo "  - Backlog"
+              echo "  - Open"
+              echo "  - Closed/Done"
+              echo "  - Ready to Release"
+              echo ""
+              echo "Please move the ticket to an active status before creating a PR."
+              exit 1
+            fi
+            
             if [ -n "$TITLE" ]; then
               echo "   Title: $TITLE"
+            fi
+            if [ -n "$STATUS" ]; then
+              echo "   Status: $STATUS"
             fi
           elif [ "$HTTP_CODE" = "404" ]; then
             echo "❌ Ticket $TICKET does not exist in Jira"
