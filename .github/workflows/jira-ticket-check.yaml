@@ -102,38 +102,9 @@ jobs:
           echo "ticket=" >> $GITHUB_OUTPUT
           echo "found_in=" >> $GITHUB_OUTPUT
 
-      - name: Extract Jira ticket from PR description
-        id: pr-description-check
-        if: steps.pr-title-check.outputs.ticket == ''
-        run: |
-          PR_BODY="${{ github.event.pull_request.body }}"
-          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
-          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
-            JIRA_PROJECT_PATTERN="[A-Z]+"
-          fi
-          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
-          
-          if [ -z "$PR_BODY" ]; then
-            echo "ticket=" >> $GITHUB_OUTPUT
-            echo "found_in=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Check for ticket in PR body/description
-          if echo "$PR_BODY" | grep -qiE "$JIRA_PATTERN"; then
-            TICKET=$(echo "$PR_BODY" | grep -oiE "$JIRA_PATTERN" | head -1)
-            echo "ticket=$TICKET" >> $GITHUB_OUTPUT
-            echo "found_in=pr_description" >> $GITHUB_OUTPUT
-            echo "✅ Found Jira ticket in PR description: $TICKET"
-            exit 0
-          fi
-          
-          echo "ticket=" >> $GITHUB_OUTPUT
-          echo "found_in=" >> $GITHUB_OUTPUT
-
       - name: Extract Jira ticket from commits
         id: commit-check
-        if: steps.pr-description-check.outputs.ticket == ''
+        if: steps.pr-title-check.outputs.ticket == ''
         run: |
           CHECK_COMMITS="${{ inputs.check-commits }}"
           if [ "$CHECK_COMMITS" != "true" ]; then
