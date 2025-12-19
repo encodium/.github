@@ -288,21 +288,21 @@ jobs:
           echo "🔍 Verifying ticket $TICKET exists in Jira..."
           
           # Make API request to check if ticket exists
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
+          # Write body to stdout and HTTP code to stderr, then capture both
+          BODY=$(curl -s \
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
-            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}")
+            -w "\n%{http_code}" \
+            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}" 2>/dev/null)
           
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
+          # Extract HTTP code (last line) and body (everything else)
+          HTTP_CODE=$(echo "$BODY" | tail -n1)
+          BODY=$(echo "$BODY" | head -n -1)
           
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Ticket $TICKET exists in Jira"
             echo "exists=true" >> $GITHUB_OUTPUT
-            
-            # Extract ticket title if available
-            TITLE=$(echo "$BODY" | grep -o '"summary":"[^"]*' | head -1 | cut -d'"' -f4 || echo "")
             
             # Extract status from Jira API response (status is nested: fields.status.name)
             # Try using jq first (if available), then fall back to grep/sed
