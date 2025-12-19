@@ -30,10 +30,10 @@ on:
         description: 'Jira instance URL (e.g., revolutionparts.atlassian.net)'
         default: 'revolutionparts.atlassian.net'
     secrets:
-      JIRA_EMAIL:
+      JIRA_GITHUB_USER_EMAIL:
         required: false
         description: 'Jira account email for API authentication'
-      JIRA_API_TOKEN:
+      JIRA_GITHUB_USER_API_TOKEN:
         required: false
         description: 'Jira API token for authentication'
 
