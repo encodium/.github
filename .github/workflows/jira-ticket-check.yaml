@@ -288,80 +288,79 @@ jobs:
           echo "🔍 Verifying ticket $TICKET exists in Jira..."
           
           # Make API request to check if ticket exists
-          # Use a unique delimiter to separate body from HTTP code
-          TEMP_FILE=$(mktemp)
-          HTTP_CODE=$(curl -s \
+          BODY=$(curl -s \
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
-            -w "%{http_code}" \
-            -o "$TEMP_FILE" \
-            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}")
+            --max-time 30 \
+            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}" 2>&1)
           
-          # Read the body from the temp file (this is clean JSON)
-          BODY=$(cat "$TEMP_FILE")
-          rm -f "$TEMP_FILE"
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Ticket $TICKET exists in Jira"
-            echo "exists=true" >> $GITHUB_OUTPUT
-            
-            # Extract status from Jira API response (status is nested: fields.status.name)
-            # Try using jq first (if available), then fall back to grep/sed
-            if command -v jq >/dev/null 2>&1; then
-              STATUS=$(echo "$BODY" | jq -r '.fields.status.name // empty' 2>/dev/null || echo "")
-            fi
-            
-            if [ -z "$STATUS" ]; then
-              # Fallback: extract status using grep/sed pattern matching
-              # Look for "status" object followed by "name" field
-              STATUS=$(echo "$BODY" | grep -o '"status"[^}]*"name":"[^"]*' | sed 's/.*"name":"\([^"]*\)".*/\1/' | head -1 || echo "")
-            fi
-            
-            if [ -z "$STATUS" ]; then
-              # Alternative: look for any "name" field that appears after "status" in the JSON
-              STATUS=$(echo "$BODY" | sed -n 's/.*"status"[^}]*"name":"\([^"]*\)".*/\1/p' | head -1 || echo "")
-            fi
-            
-            # Normalize status to lowercase for comparison
-            STATUS_LOWER=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
-            
-            # Check if status is in the list of invalid statuses
-            INVALID_STATUSES="backlog|open|closed|done|ready to release"
-            if echo "$STATUS_LOWER" | grep -qiE "($INVALID_STATUSES)"; then
-              echo "❌ Ticket $TICKET is in an invalid status: $STATUS"
-              echo ""
-              echo "Tickets in the following statuses cannot have work logged against them:"
-              echo "  - Backlog"
-              echo "  - Open"
-              echo "  - Closed/Done"
-              echo "  - Ready to Release"
-              echo ""
-              echo "Please move the ticket to an active status before creating a PR."
-              exit 1
-            fi
-            
-            if [ -n "$TITLE" ]; then
-              echo "   Title: $TITLE"
-            fi
-            if [ -n "$STATUS" ]; then
-              echo "   Status: $STATUS"
-            fi
-          elif [ "$HTTP_CODE" = "404" ]; then
-            echo "❌ Ticket $TICKET does not exist in Jira"
-            echo "exists=false" >> $GITHUB_OUTPUT
-            exit 1
-          elif [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
-            echo "⚠️  Authentication failed or insufficient permissions to verify ticket"
-            echo "⚠️  HTTP Status: $HTTP_CODE"
-            echo "⚠️  Continuing without verification..."
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️  Unexpected response from Jira API"
-            echo "⚠️  HTTP Status: $HTTP_CODE"
+          # Check if curl failed (non-zero exit code means curl error, not HTTP error)
+          CURL_EXIT=$?
+          if [ $CURL_EXIT -ne 0 ]; then
+            echo "❌ Failed to connect to Jira API (curl exit code: $CURL_EXIT)"
             echo "⚠️  Response: $BODY"
             echo "⚠️  Continuing without verification..."
             echo "exists=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if response indicates ticket doesn't exist (404 error in JSON)
+          if echo "$BODY" | grep -qiE '"errorMessages"|"statusCode":\s*404'; then
+            echo "❌ Ticket $TICKET does not exist in Jira"
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Check if response indicates authentication failure (401/403 in JSON)
+          if echo "$BODY" | grep -qiE '"statusCode":\s*(401|403)'; then
+            echo "⚠️  Authentication failed or insufficient permissions to verify ticket"
+            echo "⚠️  Continuing without verification..."
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # If we get here, assume the ticket exists and try to extract status
+          echo "✅ Ticket $TICKET exists in Jira"
+          echo "exists=true" >> $GITHUB_OUTPUT
+          
+          # Extract status from Jira API response (status is nested: fields.status.name)
+          # Try using jq first (if available), then fall back to grep/sed
+          if command -v jq >/dev/null 2>&1; then
+            STATUS=$(echo "$BODY" | jq -r '.fields.status.name // empty' 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$STATUS" ]; then
+            # Fallback: extract status using grep/sed pattern matching
+            # Look for "status" object followed by "name" field
+            STATUS=$(echo "$BODY" | grep -o '"status"[^}]*"name":"[^"]*' | sed 's/.*"name":"\([^"]*\)".*/\1/' | head -1 || echo "")
+          fi
+          
+          if [ -z "$STATUS" ]; then
+            # Alternative: look for any "name" field that appears after "status" in the JSON
+            STATUS=$(echo "$BODY" | sed -n 's/.*"status"[^}]*"name":"\([^"]*\)".*/\1/p' | head -1 || echo "")
+          fi
+          
+          # Normalize status to lowercase for comparison
+          STATUS_LOWER=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
+          
+          # Check if status is in the list of invalid statuses
+          INVALID_STATUSES="backlog|open|closed|done|ready to release"
+          if echo "$STATUS_LOWER" | grep -qiE "($INVALID_STATUSES)"; then
+            echo "❌ Ticket $TICKET is in an invalid status: $STATUS"
+            echo ""
+            echo "Tickets in the following statuses cannot have work logged against them:"
+            echo "  - Backlog"
+            echo "  - Open"
+            echo "  - Closed/Done"
+            echo "  - Ready to Release"
+            echo ""
+            echo "Please move the ticket to an active status before creating a PR."
+            exit 1
+          fi
+          
+          if [ -n "$STATUS" ]; then
+            echo "   Status: $STATUS"
           fi
 
       - name: Fail if ticket does not exist
