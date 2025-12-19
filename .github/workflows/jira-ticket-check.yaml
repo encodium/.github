@@ -288,17 +288,19 @@ jobs:
           echo "🔍 Verifying ticket $TICKET exists in Jira..."
           
           # Make API request to check if ticket exists
-          # Write body to stdout and HTTP code to stderr, then capture both
-          BODY=$(curl -s \
+          # Use a unique delimiter to separate body from HTTP code
+          TEMP_FILE=$(mktemp)
+          HTTP_CODE=$(curl -s \
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
-            -w "\n%{http_code}" \
-            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}" 2>/dev/null)
+            -w "%{http_code}" \
+            -o "$TEMP_FILE" \
+            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}")
           
-          # Extract HTTP code (last line) and body (everything else)
-          HTTP_CODE=$(echo "$BODY" | tail -n1)
-          BODY=$(echo "$BODY" | head -n -1)
+          # Read the body from the temp file (this is clean JSON)
+          BODY=$(cat "$TEMP_FILE")
+          rm -f "$TEMP_FILE"
           
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Ticket $TICKET exists in Jira"
