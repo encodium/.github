@@ -266,8 +266,8 @@ jobs:
             exit 0
           fi
           
-          JIRA_EMAIL="${{ secrets.jira-email }}"
-          JIRA_TOKEN="${{ secrets.jira-api-token }}"
+          JIRA_EMAIL="${{ secrets.JIRA_GITHUB_USER_EMAIL }}"
+          JIRA_TOKEN="${{ secrets.JIRA_GITHUB_USER_API_TOKEN }}"
           
           if [ -z "$JIRA_EMAIL" ] || [ -z "$JIRA_TOKEN" ]; then
             echo "⚠️  Jira credentials not provided, skipping ticket verification"
