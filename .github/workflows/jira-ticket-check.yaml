@@ -306,7 +306,6 @@ jobs:
             -H "Accept: application/json" \
             --max-time 30 \
             "${API_URL}" 2>&1)
-          CURL_EXIT=$?
           
           # Check if curl failed (non-zero exit code means curl error, not HTTP error)
           if [ $CURL_EXIT -ne 0 ]; then
