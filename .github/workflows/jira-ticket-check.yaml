@@ -285,18 +285,29 @@ jobs:
           # Create base64 encoded credentials
           AUTH_STRING=$(echo -n "${JIRA_EMAIL}:${JIRA_TOKEN}" | base64)
           
+          # Validate variables before making the request
+          if [ -z "$TICKET" ]; then
+            echo "❌ TICKET variable is empty"
+            exit 1
+          fi
+          
+          
           echo "🔍 Verifying ticket $TICKET exists in Jira..."
           
+          # Construct URL and validate it
+          API_URL="https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}"
+          
           # Make API request to check if ticket exists
+          # Force HTTP/1.1 to avoid HTTP/2 issues that can cause "Failed sending HTTP request"
           BODY=$(curl -s \
+            --http1.1 \
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
             --max-time 30 \
-            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}" 2>&1)
+            "${API_URL}" 2>&1)
           
           # Check if curl failed (non-zero exit code means curl error, not HTTP error)
-          CURL_EXIT=$?
           if [ $CURL_EXIT -ne 0 ]; then
             echo "❌ Failed to connect to Jira API (curl exit code: $CURL_EXIT)"
             echo "⚠️  Response: $BODY"
