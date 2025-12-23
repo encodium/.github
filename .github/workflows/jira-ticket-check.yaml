@@ -297,13 +297,20 @@ jobs:
           # Construct URL and validate it
           API_URL="https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}"
           
+          # Debug: show what we're about to request (without exposing full auth)
+          echo "Debug: API URL = ${API_URL}"
+          echo "Debug: AUTH_STRING length = ${#AUTH_STRING}"
+          
           # Make API request to check if ticket exists
+          # Force HTTP/1.1 to avoid HTTP/2 issues that can cause "Failed sending HTTP request"
           # Disable exit on error to capture curl output even on failure
           set +e
-          BODY=$(curl -v \
+          BODY=$(curl -s \
+            --http1.1 \
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
+            --max-time 30 \
             "${API_URL}" 2>&1)
           CURL_EXIT=$?
           set -e
