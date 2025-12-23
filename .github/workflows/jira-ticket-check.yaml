@@ -288,15 +288,21 @@ jobs:
           echo "🔍 Verifying ticket $TICKET exists in Jira..."
           
           # Make API request to check if ticket exists
+          # Disable exit on error to capture curl output even on failure
+          set +e
           BODY=$(curl -s \
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
             --max-time 30 \
             "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}" 2>&1)
+          CURL_EXIT=$?
+          set -e
+          
+          echo "Debug: curl exit code = $CURL_EXIT"
+          echo "Debug: body length = ${#BODY}"
           
           # Check if curl failed (non-zero exit code means curl error, not HTTP error)
-          CURL_EXIT=$?
           if [ $CURL_EXIT -ne 0 ]; then
             echo "❌ Failed to connect to Jira API (curl exit code: $CURL_EXIT)"
             echo "⚠️  Response: $BODY"
