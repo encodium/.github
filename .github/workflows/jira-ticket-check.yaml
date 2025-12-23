@@ -307,15 +307,6 @@ jobs:
             --max-time 30 \
             "${API_URL}" 2>&1)
           
-          # Check if curl failed (non-zero exit code means curl error, not HTTP error)
-          if [ $CURL_EXIT -ne 0 ]; then
-            echo "❌ Failed to connect to Jira API (curl exit code: $CURL_EXIT)"
-            echo "⚠️  Response: $BODY"
-            echo "⚠️  Continuing without verification..."
-            echo "exists=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
           # Check if response indicates ticket doesn't exist (404 error in JSON)
           if echo "$BODY" | grep -qiE '"errorMessages"|"statusCode":\s*404'; then
             echo "❌ Ticket $TICKET does not exist in Jira"
