@@ -300,7 +300,7 @@ jobs:
           # Make API request to check if ticket exists
           # Disable exit on error to capture curl output even on failure
           set +e
-          BODY=$(curl -s \
+          BODY=$(curl -v \
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
