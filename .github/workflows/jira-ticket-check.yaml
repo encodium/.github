@@ -285,7 +285,17 @@ jobs:
           # Create base64 encoded credentials
           AUTH_STRING=$(echo -n "${JIRA_EMAIL}:${JIRA_TOKEN}" | base64)
           
+          # Validate variables before making the request
+          if [ -z "$TICKET" ]; then
+            echo "❌ TICKET variable is empty"
+            exit 1
+          fi
+          
+          
           echo "🔍 Verifying ticket $TICKET exists in Jira..."
+          
+          # Construct URL and validate it
+          API_URL="https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}"
           
           # Make API request to check if ticket exists
           # Disable exit on error to capture curl output even on failure
@@ -294,8 +304,7 @@ jobs:
             -X GET \
             -H "Authorization: Basic ${AUTH_STRING}" \
             -H "Accept: application/json" \
-            --max-time 30 \
-            "https://${JIRA_INSTANCE}/rest/api/3/issue/${TICKET}" 2>&1)
+            "${API_URL}" 2>&1)
           CURL_EXIT=$?
           set -e
           
