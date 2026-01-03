@@ -43,7 +43,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*\n\tView the <${{ inputs.dashboard_url }}|Deployment>\n\tView the <${{ inputs.apm_url }}|Service APM>"
+                    "text": "*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*\n\tView the <${{ inputs.apm_url }}|Service APM>"
                   },
                   "accessory": {
                     "type": "button",
