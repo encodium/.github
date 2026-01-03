@@ -28,42 +28,47 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Build message text
-        id: build-message
+      - name: Build and send Slack notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
         run: |
           BASE_TEXT="*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*"
-          if [ -n "${{ inputs.apm_url }}" ]; then
-            MESSAGE_TEXT="${BASE_TEXT}\n\tView the <${{ inputs.apm_url }}|Service APM>"
+          if [ -n "${{ inputs.apm_url }}" ] && [ "${{ inputs.apm_url }}" != "" ]; then
+            MESSAGE_TEXT="${BASE_TEXT}\\n\\tView the <${{ inputs.apm_url }}|Service APM>"
           else
             MESSAGE_TEXT="${BASE_TEXT}"
           fi
-          echo "message_text<<EOF" >> $GITHUB_OUTPUT
-          echo "$MESSAGE_TEXT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      - name: Send deployment notification
-        uses: slackapi/slack-github-action@v1.24.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            {
-              "text": "${{ github.event.repository.name }} deployed",
-              "blocks": [
-                {
-                  "type": "section",
+          
+          # Escape the message text for JSON
+          ESCAPED_MESSAGE=$(echo "$MESSAGE_TEXT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+          REPO_NAME="${{ github.event.repository.name }}"
+          IMAGE_TAG="${{ inputs.image_tag }}"
+          RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.image_tag }}"
+          
+          PAYLOAD=$(cat <<JSON
+          {
+            "text": "${REPO_NAME} deployed",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "${ESCAPED_MESSAGE}"
+                },
+                "accessory": {
+                  "type": "button",
                   "text": {
-                    "type": "mrkdwn",
-                    "text": "${{ steps.build-message.outputs.message_text }}"
+                    "type": "plain_text",
+                    "text": "${IMAGE_TAG}"
                   },
-                  "accessory": {
-                    "type": "button",
-                    "text": {
-                      "type": "plain_text",
-                      "text": "${{ inputs.image_tag }}"
-                    },
-                    "url": "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.image_tag }}"
-                  }
+                  "url": "${RELEASE_URL}"
                 }
-              ]
-            }
+              }
+            ]
+          }
+          JSON
+          )
+          
+          curl -X POST -H 'Content-type: application/json' \
+            --data "$PAYLOAD" \
+            "$SLACK_WEBHOOK_URL"
