@@ -19,7 +19,7 @@ on:
         description: "url to service APM"
         required: false
         type: string
-        default: ""
+        default: "https://app.datadoghq.com/services?env=production"
     secrets:
       slack_webhook_url:
         required: true
@@ -28,47 +28,30 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Build and send Slack notification
+      - name: Send deployment notification
+        uses: slackapi/slack-github-action@v1.24.0
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
-        run: |
-          BASE_TEXT="*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*"
-          if [ -n "${{ inputs.apm_url }}" ] && [ "${{ inputs.apm_url }}" != "" ]; then
-            MESSAGE_TEXT="${BASE_TEXT}\\n\\tView the <${{ inputs.apm_url }}|Service APM>"
-          else
-            MESSAGE_TEXT="${BASE_TEXT}"
-          fi
-          
-          # Escape the message text for JSON
-          ESCAPED_MESSAGE=$(echo "$MESSAGE_TEXT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
-          REPO_NAME="${{ github.event.repository.name }}"
-          IMAGE_TAG="${{ inputs.image_tag }}"
-          RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.image_tag }}"
-          
-          PAYLOAD=$(cat <<JSON
-          {
-            "text": "${REPO_NAME} deployed",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "${ESCAPED_MESSAGE}"
-                },
-                "accessory": {
-                  "type": "button",
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "${{ github.event.repository.name }} deployed",
+              "blocks": [
+                {
+                  "type": "section",
                   "text": {
-                    "type": "plain_text",
-                    "text": "${IMAGE_TAG}"
+                    "type": "mrkdwn",
+                    "text": "*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*\n\tView the <${{ inputs.dashboard_url }}|Deployment>\n\tView the <${{ inputs.apm_url }}|Service APM>"
                   },
-                  "url": "${RELEASE_URL}"
+                  "accessory": {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "${{ inputs.image_tag }}"
+                    },
+                    "url": "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.image_tag }}"
+                  }
                 }
-              }
-            ]
-          }
-          JSON
-          )
-          
-          curl -X POST -H 'Content-type: application/json' \
-            --data "$PAYLOAD" \
-            "$SLACK_WEBHOOK_URL"
+              ]
+            }
