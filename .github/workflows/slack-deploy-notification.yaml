@@ -36,6 +36,7 @@ jobs:
         with:
           payload: |
             {
+              "channel": "#release",
               "text": "${{ github.event.repository.name }} deployed",
               "blocks": [
                 {
