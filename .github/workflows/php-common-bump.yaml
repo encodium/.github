@@ -21,12 +21,18 @@ on:
         required: true
       packagist_password:
         required: true
+    outputs:
+      commit_sha:
+        description: "The commit SHA after bump (new commit if changes, otherwise triggering commit)"
+        value: ${{ jobs.upgrade-common.outputs.commit_sha }}
 
 jobs:
   upgrade-common:
     name: Upgrade Common
     runs-on: ubuntu-latest
     continue-on-error: ${{ inputs.continue_on_error }}
+    outputs:
+      commit_sha: ${{ steps.commit.outputs.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,8 +70,10 @@ jobs:
           max_attempts: 5
           command: composer require revolutionparts/common --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
       - name: Commit Common Bump
+        id: commit
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git diff-index --quiet HEAD || git commit -am "${{ inputs.commit_message }} [skip actions]"
           git push origin main
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
