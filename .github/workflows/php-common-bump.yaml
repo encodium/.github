@@ -74,6 +74,41 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git diff-index --quiet HEAD || git commit -am "${{ inputs.commit_message }} [skip actions]"
-          git push origin main
+
+          # Check if there are changes to commit
+          if git diff-index --quiet HEAD; then
+            echo "No changes to commit"
+            echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git commit -am "${{ inputs.commit_message }} [skip actions]"
+
+          # Push with retry logic to handle race conditions where main has moved
+          MAX_ATTEMPTS=5
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "Push attempt $ATTEMPT of $MAX_ATTEMPTS"
+
+            # Fetch latest and rebase before pushing
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin main; then
+                echo "Push succeeded on attempt $ATTEMPT"
+                break
+              fi
+            else
+              echo "Rebase failed, resetting and retrying..."
+              git rebase --abort 2>/dev/null || true
+            fi
+
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "Failed to push after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 2
+          done
+
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
