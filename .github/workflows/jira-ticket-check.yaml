@@ -49,24 +49,25 @@ jobs:
 
       - name: Extract Jira ticket from branch name
         id: branch-check
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          JIRA_PROJECT_PATTERN: ${{ inputs.jira-project-pattern }}
         run: |
-          BRANCH_NAME="${{ github.head_ref }}"
-          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
-          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
-            JIRA_PROJECT_PATTERN="[A-Za-z]+"
+          PATTERN="$JIRA_PROJECT_PATTERN"
+          if [ -z "$PATTERN" ]; then
+            PATTERN="[A-Za-z]+"
           else
             # Make pattern case-insensitive by adding both cases if it's a simple pattern
-            # For complex patterns, rely on grep -i flag
-            JIRA_PROJECT_PATTERN=$(echo "$JIRA_PROJECT_PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
+            PATTERN=$(echo "$PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
           fi
-          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
-          
+          JIRA_PATTERN="${PATTERN}-[0-9]+"
+
           if [ -z "$BRANCH_NAME" ]; then
             echo "ticket=" >> $GITHUB_OUTPUT
             echo "found_in=" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           # Case-insensitive search
           if echo "$BRANCH_NAME" | grep -qiE "$JIRA_PATTERN"; then
             TICKET=$(echo "$BRANCH_NAME" | grep -oiE "$JIRA_PATTERN" | head -1)
@@ -77,31 +78,32 @@ jobs:
             echo "✅ Found Jira ticket in branch name: $TICKET"
             exit 0
           fi
-          
+
           echo "ticket=" >> $GITHUB_OUTPUT
           echo "found_in=" >> $GITHUB_OUTPUT
 
       - name: Extract Jira ticket from PR title
         id: pr-title-check
         if: steps.branch-check.outputs.ticket == ''
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          JIRA_PROJECT_PATTERN: ${{ inputs.jira-project-pattern }}
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
-          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
-            JIRA_PROJECT_PATTERN="[A-Za-z]+"
+          PATTERN="$JIRA_PROJECT_PATTERN"
+          if [ -z "$PATTERN" ]; then
+            PATTERN="[A-Za-z]+"
           else
             # Make pattern case-insensitive by adding both cases if it's a simple pattern
-            # For complex patterns, rely on grep -i flag
-            JIRA_PROJECT_PATTERN=$(echo "$JIRA_PROJECT_PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
+            PATTERN=$(echo "$PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
           fi
-          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
-          
+          JIRA_PATTERN="${PATTERN}-[0-9]+"
+
           if [ -z "$PR_TITLE" ]; then
             echo "ticket=" >> $GITHUB_OUTPUT
             echo "found_in=" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           # Case-insensitive search
           if echo "$PR_TITLE" | grep -qiE "$JIRA_PATTERN"; then
             TICKET=$(echo "$PR_TITLE" | grep -oiE "$JIRA_PATTERN" | head -1)
@@ -112,85 +114,87 @@ jobs:
             echo "✅ Found Jira ticket in PR title: $TICKET"
             exit 0
           fi
-          
+
           echo "ticket=" >> $GITHUB_OUTPUT
           echo "found_in=" >> $GITHUB_OUTPUT
 
       - name: Extract Jira ticket from PR description
         id: pr-description-check
         if: steps.pr-title-check.outputs.ticket == ''
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          JIRA_PROJECT_PATTERN: ${{ inputs.jira-project-pattern }}
         run: |
-          # Use printf instead of echo to safely handle special characters
-          PR_BODY=$(printf '%s' "${{ github.event.pull_request.body }}")
-          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
-          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
-            JIRA_PROJECT_PATTERN="[A-Za-z]+"
+          PATTERN="$JIRA_PROJECT_PATTERN"
+          if [ -z "$PATTERN" ]; then
+            PATTERN="[A-Za-z]+"
           else
             # Make pattern case-insensitive by adding both cases if it's a simple pattern
-            # For complex patterns, rely on grep -i flag
-            JIRA_PROJECT_PATTERN=$(printf '%s' "$JIRA_PROJECT_PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
+            PATTERN=$(echo "$PATTERN" | sed 's/\[A-Z\]\+/[A-Za-z]+/g' | sed 's/\[A-Z\]/[A-Za-z]/g')
           fi
-          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
-          
+          JIRA_PATTERN="${PATTERN}-[0-9]+"
+
           if [ -z "$PR_BODY" ]; then
             echo "ticket=" >> $GITHUB_OUTPUT
             echo "found_in=" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          # Case-insensitive search - use printf to safely pass content to grep
-          if printf '%s' "$PR_BODY" | grep -qiE "$JIRA_PATTERN"; then
-            TICKET=$(printf '%s' "$PR_BODY" | grep -oiE "$JIRA_PATTERN" | head -1)
+
+          # Case-insensitive search
+          if echo "$PR_BODY" | grep -qiE "$JIRA_PATTERN"; then
+            TICKET=$(echo "$PR_BODY" | grep -oiE "$JIRA_PATTERN" | head -1)
             # Normalize to uppercase for Jira API (Jira ticket keys are uppercase)
-            TICKET=$(printf '%s' "$TICKET" | tr '[:lower:]' '[:upper:]')
+            TICKET=$(echo "$TICKET" | tr '[:lower:]' '[:upper:]')
             echo "ticket=$TICKET" >> $GITHUB_OUTPUT
             echo "found_in=pr_description" >> $GITHUB_OUTPUT
             echo "✅ Found Jira ticket in PR description: $TICKET"
             exit 0
           fi
-          
+
           echo "ticket=" >> $GITHUB_OUTPUT
           echo "found_in=" >> $GITHUB_OUTPUT
 
       - name: Extract Jira ticket from commits
         id: commit-check
         if: steps.pr-description-check.outputs.ticket == ''
+        env:
+          CHECK_COMMITS: ${{ inputs.check-commits }}
+          JIRA_PROJECT_PATTERN: ${{ inputs.jira-project-pattern }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          CHECK_COMMITS="${{ inputs.check-commits }}"
           if [ "$CHECK_COMMITS" != "true" ]; then
             echo "ticket=" >> $GITHUB_OUTPUT
             echo "found_in=" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          JIRA_PROJECT_PATTERN="${{ inputs.jira-project-pattern }}"
-          if [ -z "$JIRA_PROJECT_PATTERN" ]; then
-            JIRA_PROJECT_PATTERN="[A-Z]+"
+
+          PATTERN="$JIRA_PROJECT_PATTERN"
+          if [ -z "$PATTERN" ]; then
+            PATTERN="[A-Z]+"
           fi
-          JIRA_PATTERN="${JIRA_PROJECT_PATTERN}-[0-9]+"
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          
+          JIRA_PATTERN="${PATTERN}-[0-9]+"
+
           if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
             echo "ticket=" >> $GITHUB_OUTPUT
             echo "found_in=" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           # Get all commit messages between base and head
           COMMIT_MESSAGES=$(git log --pretty=format:"%s" ${BASE_SHA}..${HEAD_SHA} 2>/dev/null || echo "")
-          
-          # Case-insensitive search - use printf to safely pass content to grep
-          if [ -n "$COMMIT_MESSAGES" ] && printf '%s' "$COMMIT_MESSAGES" | grep -qiE "$JIRA_PATTERN"; then
-            TICKET=$(printf '%s' "$COMMIT_MESSAGES" | grep -oiE "$JIRA_PATTERN" | head -1)
+
+          # Case-insensitive search
+          if [ -n "$COMMIT_MESSAGES" ] && echo "$COMMIT_MESSAGES" | grep -qiE "$JIRA_PATTERN"; then
+            TICKET=$(echo "$COMMIT_MESSAGES" | grep -oiE "$JIRA_PATTERN" | head -1)
             # Normalize to uppercase for Jira API (Jira ticket keys are uppercase)
-            TICKET=$(printf '%s' "$TICKET" | tr '[:lower:]' '[:upper:]')
+            TICKET=$(echo "$TICKET" | tr '[:lower:]' '[:upper:]')
             echo "ticket=$TICKET" >> $GITHUB_OUTPUT
             echo "found_in=commits" >> $GITHUB_OUTPUT
             echo "✅ Found Jira ticket in commit messages: $TICKET"
             exit 0
           fi
-          
+
           echo "ticket=" >> $GITHUB_OUTPUT
           echo "found_in=" >> $GITHUB_OUTPUT
 
@@ -216,24 +220,27 @@ jobs:
 
       - name: Fail if no Jira ticket found
         if: steps.final-ticket.outputs.ticket == ''
+        env:
+          FAIL_ON_MISSING: ${{ inputs.fail-on-missing }}
+          CHECK_COMMITS: ${{ inputs.check-commits }}
+          BRANCH_NAME: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          FAIL_ON_MISSING="${{ inputs.fail-on-missing }}"
           if [ "$FAIL_ON_MISSING" != "true" ] && [ -n "$FAIL_ON_MISSING" ]; then
             echo "⚠️  No Jira ticket found, but fail-on-missing is disabled"
             exit 0
           fi
-          
+
           # Default to true if not specified (for direct PR triggers)
           if [ -z "$FAIL_ON_MISSING" ]; then
             FAIL_ON_MISSING="true"
           fi
-          
+
           if [ "$FAIL_ON_MISSING" != "true" ]; then
             exit 0
           fi
-          
+
           echo "❌ No Jira ticket found in branch name, PR title, PR description"
-          CHECK_COMMITS="${{ inputs.check-commits }}"
           if [ "$CHECK_COMMITS" == "true" ]; then
             echo "   or commit messages."
           else
@@ -241,8 +248,8 @@ jobs:
           fi
           echo ""
           echo "Please ensure one of the following contains a Jira ticket key (e.g., DEVEX-600, DEV-123):"
-          echo "  - Branch name: ${{ github.head_ref }}"
-          echo "  - PR title: ${{ github.event.pull_request.title }}"
+          echo "  - Branch name: $BRANCH_NAME"
+          echo "  - PR title: $PR_TITLE"
           echo "  - PR description"
           if [ "$CHECK_COMMITS" == "true" ]; then
             echo "  - Commit messages"
@@ -254,31 +261,31 @@ jobs:
       - name: Verify ticket exists in Jira
         id: verify-ticket
         if: steps.final-ticket.outputs.ticket != ''
+        env:
+          VERIFY_TICKET: ${{ inputs.verify-ticket-exists }}
+          JIRA_EMAIL: ${{ secrets.JIRA_GITHUB_USER_EMAIL }}
+          JIRA_TOKEN: ${{ secrets.JIRA_GITHUB_USER_API_TOKEN }}
+          TICKET: ${{ steps.final-ticket.outputs.ticket }}
+          JIRA_INSTANCE: ${{ inputs.jira-instance }}
         run: |
-          VERIFY_TICKET="${{ inputs.verify-ticket-exists }}"
           # Default to true if not specified (for direct PR triggers or when default is used)
           if [ -z "$VERIFY_TICKET" ]; then
             VERIFY_TICKET="true"
           fi
-          
+
           if [ "$VERIFY_TICKET" = "false" ]; then
             echo "⚠️  Ticket verification is disabled, skipping API check"
             echo "exists=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          JIRA_EMAIL="${{ secrets.JIRA_GITHUB_USER_EMAIL }}"
-          JIRA_TOKEN="${{ secrets.JIRA_GITHUB_USER_API_TOKEN }}"
-          
+
           if [ -z "$JIRA_EMAIL" ] || [ -z "$JIRA_TOKEN" ]; then
             echo "⚠️  Jira credentials not provided, skipping ticket verification"
             echo "⚠️  To enable verification, provide JIRA_GITHUB_USER_EMAIL and JIRA_GITHUB_USER_API_TOKEN secrets"
             echo "exists=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          TICKET="${{ steps.final-ticket.outputs.ticket }}"
-          JIRA_INSTANCE="${{ inputs.jira-instance }}"
+
           if [ -z "$JIRA_INSTANCE" ]; then
             JIRA_INSTANCE="revolutionparts.atlassian.net"
           fi
@@ -382,9 +389,10 @@ jobs:
 
       - name: Fail if ticket does not exist
         if: steps.final-ticket.outputs.ticket != '' && steps.verify-ticket.outputs.exists == 'false'
+        env:
+          TICKET: ${{ steps.final-ticket.outputs.ticket }}
+          JIRA_INSTANCE: ${{ inputs.jira-instance }}
         run: |
-          TICKET="${{ steps.final-ticket.outputs.ticket }}"
-          JIRA_INSTANCE="${{ inputs.jira-instance }}"
           if [ -z "$JIRA_INSTANCE" ]; then
             JIRA_INSTANCE="revolutionparts.atlassian.net"
           fi
@@ -398,12 +406,14 @@ jobs:
 
       - name: Success message
         if: steps.final-ticket.outputs.ticket != '' && (steps.verify-ticket.outputs.exists == 'true' || steps.verify-ticket.outputs.exists == '')
+        env:
+          TICKET: ${{ steps.final-ticket.outputs.ticket }}
+          JIRA_INSTANCE: ${{ inputs.jira-instance }}
+          FOUND_IN: ${{ steps.final-ticket.outputs.found_in }}
         run: |
-          TICKET="${{ steps.final-ticket.outputs.ticket }}"
-          JIRA_INSTANCE="${{ inputs.jira-instance }}"
           if [ -z "$JIRA_INSTANCE" ]; then
             JIRA_INSTANCE="revolutionparts.atlassian.net"
           fi
           echo "✅ Jira ticket found: $TICKET"
-          echo "   Found in: ${{ steps.final-ticket.outputs.found_in }}"
+          echo "   Found in: $FOUND_IN"
           echo "   Link: https://${JIRA_INSTANCE}/browse/$TICKET"
