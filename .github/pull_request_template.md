@@ -22,6 +22,16 @@ Please describe in detail how you tested your changes. Steps to Reproduce, etc.
 This section should be thorough enough that reviewers can replicate the testing.
 -->
 
+## Checklist
+
+- [ ] **Jira**: Jira key present (branch name / PR title / PR description) and Jira link filled in above
+- [ ] **PR title**: includes Jira key (recommended: `[PROJECT-1234] ...`)
+- [ ] **Commits**: conventional commits format (`type(scope): subject`)
+- [ ] **Quality**: lint/format/static-analysis run and clean (as applicable)
+- [ ] **Tests**: run and passing; added/updated tests where behavior changed
+- [ ] **Type safety** (PHP/TS): explicit types; arrays/shapes documented where needed; no `empty()` in PHP
+- [ ] **GitHub Actions changes** (if applicable): actionlint clean; avoid interpolating PR title/body directly in `run:` (pass via `env:`)
+
 <!--
 ## Sonar Test Coverage
 If your PR does not pass the SonarCloud Code Analysis, describe why it cannot pass before merging.
