@@ -31,4 +31,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Lint
-        run: ./kube-linter lint "${{ inputs.directory }}"
+        run: ./kube-linter lint "$LINT_DIR"
+        env:
+          LINT_DIR: ${{ inputs.directory }}
