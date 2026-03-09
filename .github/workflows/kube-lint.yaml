@@ -11,10 +11,26 @@ jobs:
   kube-linter:
     name: chart-lint
     runs-on: ubuntu-latest
+    env:
+      KUBE_LINTER_VERSION: '0.8.1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Scan repo with kube-linter
-        uses: stackrox/kube-linter-action@v1
+      - name: Cache kube-linter
+        id: cache
+        uses: actions/cache@v4
         with:
-          directory: ${{ inputs.directory }}
+          path: kube-linter
+          key: kube-linter-${{ env.KUBE_LINTER_VERSION }}
+      - name: Install kube-linter
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          gh release download "v${KUBE_LINTER_VERSION}" --repo stackrox/kube-linter --pattern 'kube-linter-linux.tar.gz'
+          tar -xf kube-linter-linux.tar.gz
+          rm kube-linter-linux.tar.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Lint
+        run: ./kube-linter lint "$LINT_DIR"
+        env:
+          LINT_DIR: ${{ inputs.directory }}
