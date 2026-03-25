@@ -15,10 +15,10 @@ jobs:
       KUBE_LINTER_VERSION: '0.8.1'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Cache kube-linter
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: kube-linter
           key: kube-linter-${{ env.KUBE_LINTER_VERSION }}
