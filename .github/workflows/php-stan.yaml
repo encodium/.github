@@ -51,6 +51,8 @@ jobs:
           coverage: none
           php-version: ${{ inputs.php_version }}
           tools: composer
+          # symfony/cache 7.4+ conflicts with ext-redis < 6.1; pin PECL version (see setup-php wiki)
+          extensions: mbstring, xml, curl, redis-6.3.0
         env:
           COMPOSER_AUTH_JSON: |
             {
