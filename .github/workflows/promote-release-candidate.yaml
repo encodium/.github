@@ -1,0 +1,141 @@
+name: Promote Release Candidate
+on:
+  workflow_call:
+    inputs:
+      source_tag:
+        description: "Source -main.N tag to promote (blank = latest -main.N tag in the repo)"
+        required: false
+        default: ""
+        type: string
+      image_tag_prefixes:
+        description: "JSON array of image tag prefixes to retag (e.g. '[\"\", \"nginx-\"]'). Use an empty string for the base image."
+        required: true
+        type: string
+      registry:
+        description: "Docker registry hosting the images"
+        required: false
+        default: "ghcr.io"
+        type: string
+      target_branch:
+        description: "Branch to reset to the source tag's commit (used as the release candidate branch)"
+        required: false
+        default: "rc"
+        type: string
+    secrets:
+      repo_write_pat:
+        description: "PAT with contents:write for force-pushing the target branch and pushing tags"
+        required: true
+      gh_token:
+        description: "PAT with packages:write on the caller repo's container registry (used to retag images)"
+        required: true
+    outputs:
+      source_tag:
+        description: "The -main.N tag that was promoted"
+        value: ${{ jobs.promote.outputs.source_tag }}
+      pretty_tag:
+        description: "The promoted pretty (release) tag"
+        value: ${{ jobs.promote.outputs.pretty_tag }}
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    outputs:
+      source_tag: ${{ steps.resolve.outputs.source_tag }}
+      pretty_tag: ${{ steps.compute.outputs.pretty_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.repo_write_pat }}
+      - name: Resolve source tag
+        id: resolve
+        env:
+          INPUT_TAG: ${{ inputs.source_tag }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG=$(git tag --sort=-creatordate --list '*-main.*' | head -n1)
+            if [ -z "$TAG" ]; then
+              echo "::error::No -main.N tag found in this repo"
+              exit 1
+            fi
+          fi
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag '$TAG' does not exist"
+            exit 1
+          fi
+          echo "source_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved source tag: $TAG"
+      - name: Compute pretty version
+        id: compute
+        env:
+          SRC: ${{ steps.resolve.outputs.source_tag }}
+        run: |
+          PRETTY="${SRC%-main.*}"
+          if [ "$PRETTY" = "$SRC" ]; then
+            echo "::error::Source tag '$SRC' doesn't match '*-main.N' pattern. Pass a -main.N tag via source_tag, or leave blank to use the latest."
+            exit 1
+          fi
+          if git rev-parse "$PRETTY" >/dev/null 2>&1; then
+            {
+              echo "## Release Candidate promotion blocked"
+              echo ""
+              echo "Pretty tag \`$PRETTY\` already exists — source \`$SRC\` has already been promoted."
+              echo ""
+              echo "### What to do"
+              echo "- **New changes on \`main\`?** Wait for the Build workflow to produce a fresh \`-main.N\` tag, then re-run."
+              echo "- **Need to redeploy the existing RC to QA?** Run the \`QA EKS Deploy\` workflow with \`image_tag=$PRETTY\`."
+              echo "- **Want to promote a specific \`-main.N\` tag?** Re-run and set \`source_tag\` explicitly."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Pretty tag '$PRETTY' already exists (source '$SRC' has already been promoted). See job summary for next steps."
+            exit 1
+          fi
+          echo "pretty_tag=$PRETTY" >> "$GITHUB_OUTPUT"
+          echo "Pretty tag: $PRETTY"
+      - name: Configure git
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+      - name: Reset target branch to source tag
+        env:
+          SRC: ${{ steps.resolve.outputs.source_tag }}
+          TARGET: ${{ inputs.target_branch }}
+        run: |
+          git push origin "+refs/tags/$SRC:refs/heads/$TARGET"
+      - name: Login to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.gh_token }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Retag docker images
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE_NAME: ${{ github.repository }}
+          SRC: ${{ steps.resolve.outputs.source_tag }}
+          PRETTY: ${{ steps.compute.outputs.pretty_tag }}
+          PREFIXES_JSON: ${{ inputs.image_tag_prefixes }}
+        run: |
+          count=$(echo "$PREFIXES_JSON" | jq 'length')
+          if [ "$count" -eq 0 ]; then
+            echo "::error::image_tag_prefixes must not be empty"
+            exit 1
+          fi
+          echo "$PREFIXES_JSON" | jq -r '.[]' | while IFS= read -r prefix; do
+            echo "Retagging ${prefix}${SRC} -> ${prefix}${PRETTY}"
+            docker buildx imagetools create \
+              --tag "$REGISTRY/$IMAGE_NAME:${prefix}${PRETTY}" \
+              "$REGISTRY/$IMAGE_NAME:${prefix}${SRC}"
+          done
+      - name: Create pretty tag and GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.compute.outputs.pretty_tag }}
+          commit: ${{ steps.resolve.outputs.source_tag }}
+          name: Release Candidate ${{ steps.compute.outputs.pretty_tag }}
+          body: "Promoted from `${{ steps.resolve.outputs.source_tag }}`."
+          prerelease: true
