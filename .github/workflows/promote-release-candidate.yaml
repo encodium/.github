@@ -23,7 +23,10 @@ on:
         type: string
     secrets:
       repo_write_pat:
-        description: "PAT with contents:write for force-pushing the stage branch and pushing tags"
+        description: "PAT with contents:write for force-pushing the target branch and pushing tags"
+        required: true
+      gh_token:
+        description: "PAT with packages:write on the caller repo's container registry (used to retag images)"
         required: true
     outputs:
       source_tag:
@@ -101,19 +104,12 @@ jobs:
           TARGET: ${{ inputs.target_branch }}
         run: |
           git push origin "+refs/tags/$SRC:refs/heads/$TARGET"
-      - name: Create pretty tag
-        env:
-          SRC: ${{ steps.resolve.outputs.source_tag }}
-          PRETTY: ${{ steps.compute.outputs.pretty_tag }}
-        run: |
-          git tag "$PRETTY" "$SRC"
-          git push origin "$PRETTY"
       - name: Login to container registry
         uses: docker/login-action@v3
         with:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.gh_token }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Retag docker images
@@ -135,10 +131,11 @@ jobs:
               --tag "$REGISTRY/$IMAGE_NAME:${prefix}${PRETTY}" \
               "$REGISTRY/$IMAGE_NAME:${prefix}${SRC}"
           done
-      - name: Create GitHub release
+      - name: Create pretty tag and GitHub release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.compute.outputs.pretty_tag }}
+          commit: ${{ steps.resolve.outputs.source_tag }}
           name: Release Candidate ${{ steps.compute.outputs.pretty_tag }}
           body: "Promoted from `${{ steps.resolve.outputs.source_tag }}`."
-          prerelease: false
+          prerelease: true
