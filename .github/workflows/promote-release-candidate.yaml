@@ -16,6 +16,11 @@ on:
         required: false
         default: "ghcr.io"
         type: string
+      target_branch:
+        description: "Branch to reset to the source tag's commit (used as the release candidate branch)"
+        required: false
+        default: "rc"
+        type: string
     secrets:
       repo_write_pat:
         description: "PAT with contents:write for force-pushing the stage branch and pushing tags"
@@ -90,11 +95,12 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-      - name: Reset stage branch to source tag
+      - name: Reset target branch to source tag
         env:
           SRC: ${{ steps.resolve.outputs.source_tag }}
+          TARGET: ${{ inputs.target_branch }}
         run: |
-          git push origin "+refs/tags/$SRC:refs/heads/stage"
+          git push origin "+refs/tags/$SRC:refs/heads/$TARGET"
       - name: Create pretty tag
         env:
           SRC: ${{ steps.resolve.outputs.source_tag }}
