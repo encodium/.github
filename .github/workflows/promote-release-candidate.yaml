@@ -62,12 +62,13 @@ jobs:
               exit 1
             fi
           fi
-          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+          if ! SHA=$(git rev-parse "$TAG" 2>/dev/null); then
             echo "::error::Tag '$TAG' does not exist"
             exit 1
           fi
           echo "source_tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Resolved source tag: $TAG"
+          echo "source_sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Resolved source tag: $TAG ($SHA)"
       - name: Compute pretty version
         id: compute
         env:
@@ -136,7 +137,7 @@ jobs:
         with:
           token: ${{ secrets.repo_write_pat }}
           tag: ${{ steps.compute.outputs.pretty_tag }}
-          commit: ${{ steps.resolve.outputs.source_tag }}
+          commit: ${{ steps.resolve.outputs.source_sha }}
           name: Release Candidate ${{ steps.compute.outputs.pretty_tag }}
           body: "Promoted from `${{ steps.resolve.outputs.source_tag }}`."
           prerelease: true
