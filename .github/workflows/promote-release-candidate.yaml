@@ -21,6 +21,16 @@ on:
         required: false
         default: "rc"
         type: string
+      additional_image_refs:
+        description: >
+          JSON array of full image references (with `{tag}` placeholder) to
+          retag in addition to the `image_tag_prefixes` above. Use this for
+          images that don't live at the caller repo's own registry path — for
+          example, `-profiler` variants published to a separate image name.
+          Example: '["ghcr.io/owner/repo-profiler:{tag}"]'
+        required: false
+        default: "[]"
+        type: string
     secrets:
       repo_write_pat:
         description: "PAT with contents:write for force-pushing the target branch and pushing tags"
@@ -123,6 +133,7 @@ jobs:
           SRC: ${{ steps.resolve.outputs.source_tag }}
           PRETTY: ${{ steps.compute.outputs.pretty_tag }}
           PREFIXES_JSON: ${{ inputs.image_tag_prefixes }}
+          ADDITIONAL_JSON: ${{ inputs.additional_image_refs }}
         run: |
           count=$(echo "$PREFIXES_JSON" | jq 'length')
           if [ "$count" -eq 0 ]; then
@@ -134,6 +145,13 @@ jobs:
             docker buildx imagetools create \
               --tag "$REGISTRY/$IMAGE_NAME:${prefix}${PRETTY}" \
               "$REGISTRY/$IMAGE_NAME:${prefix}${SRC}"
+          done
+          echo "$ADDITIONAL_JSON" | jq -r '.[]' | while IFS= read -r template; do
+            [ -z "$template" ] && continue
+            src_ref="${template//\{tag\}/$SRC}"
+            dst_ref="${template//\{tag\}/$PRETTY}"
+            echo "Retagging (additional) $src_ref -> $dst_ref"
+            docker buildx imagetools create --tag "$dst_ref" "$src_ref"
           done
       - name: Create pretty tag and GitHub release
         uses: ncipollo/release-action@v1
