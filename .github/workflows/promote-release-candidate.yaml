@@ -62,7 +62,10 @@ jobs:
               exit 1
             fi
           fi
-          if ! SHA=$(git rev-parse "$TAG" 2>/dev/null); then
+          # '^{commit}' dereferences annotated tags to their target commit;
+          # for lightweight tags this is a no-op. Branch refs must point to
+          # commits, not tag objects, so the commit SHA is what we push.
+          if ! SHA=$(git rev-parse "$TAG^{commit}" 2>/dev/null); then
             echo "::error::Tag '$TAG' does not exist"
             exit 1
           fi
@@ -99,12 +102,12 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-      - name: Reset target branch to source tag
+      - name: Reset target branch to source commit
         env:
-          SRC: ${{ steps.resolve.outputs.source_tag }}
+          SHA: ${{ steps.resolve.outputs.source_sha }}
           TARGET: ${{ inputs.target_branch }}
         run: |
-          git push origin "+refs/tags/$SRC:refs/heads/$TARGET"
+          git push origin "+$SHA:refs/heads/$TARGET"
       - name: Login to container registry
         uses: docker/login-action@v3
         with:
