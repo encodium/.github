@@ -95,6 +95,18 @@ jobs:
           if [ ! -z "${{ inputs.release_name }}" ]; then
             RELEASE_NAME="${{ inputs.release_name }}"
           fi
+
+          # If a prior run was cancelled mid-upgrade, the release may be stuck
+          # in a 'pending' status that blocks all subsequent operations. Detect
+          # and clear it before proceeding so we don't require manual intervention.
+          STATUS=$(helm status "${RELEASE_NAME}" -n "${{ inputs.namespace }}" -o json 2>/dev/null | jq -r '.info.status' || echo "none")
+          case "$STATUS" in
+            pending-install|pending-upgrade|pending-rollback)
+              echo "::warning::Release '${RELEASE_NAME}' stuck in '${STATUS}' (likely from a cancelled prior run); rolling back before upgrade."
+              helm rollback "${RELEASE_NAME}" 0 -n "${{ inputs.namespace }}" || helm uninstall "${RELEASE_NAME}" -n "${{ inputs.namespace }}"
+              ;;
+          esac
+
           helm upgrade -i ${RELEASE_NAME} ./deployments --install ${WAIT_ARG} ${TIMEOUT_ARG} --set image.tag="${{ inputs.image_tag }}" -n ${{ inputs.namespace }} ${ARG_VALUES_FILE}
       - name: Update GitHub release
         if: inputs.environment == 'prod'
