@@ -118,8 +118,8 @@ jobs:
           file: ${{ inputs.dockerfile_app_path }}
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
   build-and-push-webserver-image:
     if: ${{ inputs.build_webserver_image }}
     runs-on: ubuntu-latest
@@ -146,8 +146,8 @@ jobs:
           file: ${{ inputs.dockerfile_webserver_path }}
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-webserver
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-webserver,mode=max
   build-and-push-cli-image:
     if: ${{ inputs.build_cli_image }}
     runs-on: ubuntu-latest
@@ -211,5 +211,5 @@ jobs:
           file: ${{ inputs.dockerfile_cli_path }}
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cli-${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cli-latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-cli
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-cli,mode=max
