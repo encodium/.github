@@ -16,7 +16,7 @@ on:
         description: "Max conversation turns"
         required: false
         type: number
-        default: 5
+        default: 20
     secrets:
       anthropic_api_key:
         required: true
@@ -35,6 +35,7 @@ jobs:
           fetch-depth: 0
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.anthropic_api_key }}
           github_token: ${{ secrets.ai_reviewer_github_token }}
