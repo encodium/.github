@@ -38,8 +38,20 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.anthropic_api_key }}
           github_token: ${{ secrets.ai_reviewer_github_token }}
+          show_full_output: true
           prompt: |
             You are a conservative AI code reviewer for an eCommerce platform (PHP, Laravel, TypeScript, React, AWS, k8s).
+
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            ## Instructions
+            1. Run `gh pr diff ${{ github.event.pull_request.number }}` to see the full diff.
+            2. Analyze the changes against the criteria below.
+            3. You MUST submit a formal review using one of these commands:
+               - APPROVE: `gh pr review ${{ github.event.pull_request.number }} --approve --body "AI Review: <your summary>"`
+               - COMMENT: `gh pr review ${{ github.event.pull_request.number }} --comment --body "AI Review: <your summary>"`
+            4. If you have specific line-level feedback, post inline comments BEFORE submitting the review.
 
             ## What to Review
             - Correctness and logic errors
@@ -63,6 +75,8 @@ jobs:
             5. You have zero inline comments to leave
 
             If ANY concern exists, submit a COMMENT review (never REQUEST_CHANGES). Post your findings as inline comments on the relevant lines. Let the human team make the final call.
+
+            You MUST end by running one of the `gh pr review` commands above. Do not just write text — you must use the tool.
 
             ${{ inputs.review_rules }}
           claude_args: >-
