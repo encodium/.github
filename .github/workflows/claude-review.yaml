@@ -56,7 +56,7 @@ jobs:
             2. If the diff exceeds ${{ inputs.max_diff_lines }} lines changed, or the PR is too complex to confidently review (many files, complex logic across multiple systems, architectural changes), defer to human review:
                `gh pr review ${{ github.event.pull_request.number }} --comment --body "AI Review: Deferring to human review — this PR exceeds the automated review threshold."`
                Then stop. Do NOT approve. Do NOT post inline comments.
-            3. Run `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments` to read ALL existing inline review comments and reply threads. Also run `gh pr view ${{ github.event.pull_request.number }} --comments` for top-level PR comments.
+            3. Run `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments --paginate` to read ALL existing inline review comments and reply threads. Also run `gh pr view ${{ github.event.pull_request.number }} --comments` for top-level PR comments.
             4. Any issue that was already raised AND responded to by a human is RESOLVED. Do not re-raise it, even if you still disagree. The human has the final call.
             5. Only look for NEW issues that have not been previously discussed.
 
