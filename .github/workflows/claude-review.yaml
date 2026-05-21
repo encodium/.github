@@ -191,13 +191,42 @@ jobs:
             - NEVER write a `decision` other than `approve`, `comment`, or `defer`.
             - NEVER post duplicate inline comments that already exist on the PR.
             - NEVER attempt to call `gh pr review` or `gh pr comment` — the tools are not available to you; the follow-up step posts the formal review.
+            - NEVER invoke `gh api` with `-X POST`, `-X PUT`, `-X PATCH`, `-X DELETE`, `--method`, `-f`, `-F`, or `--input`. The ONLY `gh api` invocation permitted is reading the `/comments` endpoint exactly as shown in Step 1. Any attempt to write through `gh api` will be blocked by the tool runner and dismissed by the workflow.
 
             ## Repo-specific rules
             ${{ inputs.review_rules }}
           claude_args: >-
             --max-turns ${{ inputs.max_turns }}
             --model ${{ inputs.model }}
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Write,Bash(gh api:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Write,Bash(gh api:repos/*/pulls/*/comments*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+      # Defense-in-depth: dismiss any approval review the AI may have created directly
+      # (e.g. by smuggling a write through `gh api` despite the tightened allowedTools glob).
+      # Filters to the current HEAD SHA so stale approvals from concurrent older-commit runs
+      # are left alone — GitHub already treats those as obsolete on a new push.
+      - name: Dismiss unauthorized AI approvals
+        if: steps.size.outputs.too_big != 'true'
+        run: |
+          set -euo pipefail
+          bot_user=$(gh api user --jq '.login')
+          unauthorized=$(
+            gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+              | jq -r --arg sha "$HEAD_SHA_AT_START" --arg bot "$bot_user" \
+                  '.[] | select(.user.login == $bot and .state == "APPROVED" and .commit_id == $sha) | .id'
+          )
+          if [ -z "$unauthorized" ]; then
+            exit 0
+          fi
+          while IFS= read -r review_id; do
+            [ -n "$review_id" ] || continue
+            echo "::warning::Dismissing unauthorized AI approval review $review_id on $HEAD_SHA_AT_START — bypassed verdict workflow."
+            gh api "repos/$REPO/pulls/$PR_NUMBER/reviews/$review_id/dismissals" \
+              -X PUT \
+              -f message="Auto-dismissed: AI reviewer submitted an approval outside the verdict workflow. The workflow will post the authoritative review next." \
+              >/dev/null
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Dismissed unauthorized AI approval review \`$review_id\` from \`$bot_user\`." >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$unauthorized"
 
       - name: Apply verdict
         id: apply
