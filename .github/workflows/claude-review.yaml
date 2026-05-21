@@ -18,15 +18,32 @@ on:
         type: number
         default: 20
       max_diff_lines:
-        description: "Max diff lines before deferring to human review"
+        description: "Max lines changed (additions + deletions) before deferring to human review"
         required: false
         type: number
-        default: 1500
+        default: 500
+      max_changed_files:
+        description: "Max files changed before deferring to human review"
+        required: false
+        type: number
+        default: 30
+      slack_channel:
+        description: "Optional Slack channel (e.g. '#dev-account-experience-4all') to notify when the AI auto-approves a PR. Requires slack_bot_token secret."
+        required: false
+        type: string
+        default: ""
     secrets:
       anthropic_api_key:
         required: true
       ai_reviewer_github_token:
         required: true
+      slack_bot_token:
+        description: "Slack bot token (xoxb-...) used to post approval notifications when slack_channel is set."
+        required: false
+
+concurrency:
+  group: ai-review-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   ai-review:
@@ -34,12 +51,77 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      checks: write
+    env:
+      GH_TOKEN: ${{ secrets.ai_reviewer_github_token }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA_AT_START: ${{ github.event.pull_request.head.sha }}
+      MAX_DIFF_LINES: ${{ inputs.max_diff_lines }}
+      MAX_CHANGED_FILES: ${{ inputs.max_changed_files }}
+      # Paths and filename patterns treated as test code. These are excluded from the size gate
+      # because tests legitimately get long and shouldn't count against the human/AI review budget.
+      TEST_FILE_REGEX: '(^|/)(test|tests|__tests__|__mocks__|__snapshots__|cypress|e2e)/|(^|/)[^/]+Test\.php$|\.test\.[a-z0-9]+$|\.spec\.[a-z0-9]+$'
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      - name: Check PR size
+        id: size
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ai-review"
+          sizes=$(
+            gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate \
+              | jq --arg pat "$TEST_FILE_REGEX" '[.[] | {filename, is_test: (.filename | test($pat)), changes: (.additions + .deletions)}] | {
+                  total_lines: (map(.changes) | add // 0),
+                  total_files: length,
+                  prod_lines: ([.[] | select(.is_test | not) | .changes] | add // 0),
+                  prod_files: ([.[] | select(.is_test | not)] | length),
+                  test_lines: ([.[] | select(.is_test) | .changes] | add // 0),
+                  test_files: ([.[] | select(.is_test)] | length)
+                }'
+          )
+          echo "$sizes" > "$RUNNER_TEMP/ai-review/sizes.json"
+          total_lines=$(echo "$sizes" | jq -r '.total_lines')
+          total_files=$(echo "$sizes" | jq -r '.total_files')
+          prod_lines=$(echo "$sizes" | jq -r '.prod_lines')
+          prod_files=$(echo "$sizes" | jq -r '.prod_files')
+          test_lines=$(echo "$sizes" | jq -r '.test_lines')
+          test_files=$(echo "$sizes" | jq -r '.test_files')
+          echo "prod_lines=$prod_lines" >> "$GITHUB_OUTPUT"
+          echo "prod_files=$prod_files" >> "$GITHUB_OUTPUT"
+          {
+            echo "## AI Review — Size Gate"
+            echo ""
+            echo "|                 | Production | Tests | Total |"
+            echo "| ---             |        --- |   --- |   --- |"
+            echo "| Lines changed   | \`$prod_lines\` | \`$test_lines\` | \`$total_lines\` |"
+            echo "| Files changed   | \`$prod_files\` | \`$test_files\` | \`$total_files\` |"
+            echo ""
+            echo "Limits: \`$MAX_DIFF_LINES\` production lines / \`$MAX_CHANGED_FILES\` production files. Test files do not count toward the gate."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$prod_lines" -gt "$MAX_DIFF_LINES" ] || [ "$prod_files" -gt "$MAX_CHANGED_FILES" ]; then
+            echo "too_big=true" >> "$GITHUB_OUTPUT"
+            body_file="$RUNNER_TEMP/ai-review-defer-body.md"
+            {
+              echo "AI Review: Deferring to human review — PR exceeds the automated review threshold."
+              echo ""
+              echo "- Production lines changed: $prod_lines (limit $MAX_DIFF_LINES)"
+              echo "- Production files changed: $prod_files (limit $MAX_CHANGED_FILES)"
+              echo "- Test changes excluded from the count: $test_lines lines / $test_files files"
+            } > "$body_file"
+            gh pr review "$PR_NUMBER" --repo "$REPO" --comment --body-file "$body_file"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Skipped AI review — PR too large." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "too_big=false" >> "$GITHUB_OUTPUT"
+            mkdir -p "$RUNNER_TEMP/ai-review"
+          fi
+
       - uses: anthropics/claude-code-action@v1
+        if: steps.size.outputs.too_big != 'true'
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.anthropic_api_key }}
@@ -50,51 +132,311 @@ jobs:
 
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
+            VERDICT_FILE: ${{ runner.temp }}/ai-review/verdict.json
 
-            ## Step 1: Check scope and prior reviews
+            You CANNOT submit pull request reviews directly. You do not have access to `gh pr review`. A follow-up workflow step will read your verdict file and post the formal review on your behalf. Your job is to (1) analyze the PR, (2) post any inline concerns, and (3) write a structured verdict file.
+
+            ## Step 1: Read the PR
             1. Run `gh pr diff ${{ github.event.pull_request.number }}` to see the diff.
-            2. If the diff exceeds ${{ inputs.max_diff_lines }} lines changed, or the PR is too complex to confidently review (many files, complex logic across multiple systems, architectural changes), defer to human review:
-               `gh pr review ${{ github.event.pull_request.number }} --comment --body "AI Review: Deferring to human review — this PR exceeds the automated review threshold."`
-               Then stop. Do NOT approve. Do NOT post inline comments.
-            3. Run `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments --paginate` to read ALL existing inline review comments and reply threads. Also run `gh pr view ${{ github.event.pull_request.number }} --comments` for top-level PR comments.
-            4. Any issue that was already raised AND responded to by a human is RESOLVED. Do not re-raise it, even if you still disagree. The human has the final call.
-            5. Only look for NEW issues that have not been previously discussed.
+            2. Run `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments --paginate` to read ALL existing inline review comments and reply threads. Also run `gh pr view ${{ github.event.pull_request.number }} --comments` for top-level PR comments.
+            3. Any issue that was already raised AND responded to by a human is RESOLVED. Do not re-raise it, even if you still disagree.
+            4. Only look for NEW issues that have not been previously discussed.
 
-            ## Step 2: Decide what to do
-            You have exactly two options. Pick ONE:
-
-            **Option A — Approve:**
-            If the change is low-risk AND you have zero new concerns, approve:
-            `gh pr review ${{ github.event.pull_request.number }} --approve --body "AI Review: Approved"`
-
-            **Option B — Post inline comments:**
-            If you found new concerns not already discussed, post them as inline comments on the relevant lines. Then submit a comment review:
-            `gh pr review ${{ github.event.pull_request.number }} --comment --body "AI Review: Found new concerns — see inline comments."`
-            Do NOT approve.
-
-            ## What to look for
+            ## Step 2: What to look for / ignore
+            Look for:
             - Correctness and logic errors
             - Security vulnerabilities (SQL injection, XSS, auth bypass, data exposure)
             - Data integrity risks (wrong column, missing validation, silent data loss)
             - Race conditions or concurrency issues
             - Breaking changes to public APIs or interfaces
 
-            ## What to ignore
+            Ignore:
             - Code style or formatting (linters handle this)
             - Missing comments or documentation
             - Naming preferences
             - Test coverage quantity
 
-            ## Rules
-            - NEVER use REQUEST_CHANGES.
-            - NEVER approve when you have concerns. Use Option B instead.
-            - NEVER re-raise an issue a human already responded to.
-            - NEVER post duplicate comments that are already on the PR.
-            - You MUST end by submitting a formal review via `gh pr review`. Do not just write text.
+            Test files (paths in `test/`, `tests/`, `__tests__/`, `__mocks__/`, `__snapshots__/`, `cypress/`, `e2e/`, or filenames matching `*Test.php`, `*.test.*`, `*.spec.*`):
+            - DO NOT spend time hunting for bugs in test code.
+            - You may skim them briefly to confirm the new production code paths are exercised.
+            - Do NOT post inline comments on test files unless the test would clearly fail to detect a real production bug (e.g. a test that asserts the wrong outcome).
+            - Test changes do not count toward the size gate and should not influence your `defer` decision on size grounds.
+
+            If you find new concerns, post them as inline comments on the relevant lines using the inline_comment tool.
+
+            ## Step 3: Write the verdict file
+            At the end of your run you MUST use the Write tool to create the verdict file at the path in VERDICT_FILE with exactly this JSON shape (no extra keys, no markdown fences):
+
+            {
+              "decision": "approve" | "comment" | "defer",
+              "reasoning": "<1-3 sentences justifying the decision; see rules below>",
+              "concerns_posted": <integer count of inline comments you created in this run>
+            }
+
+            ## Decision rules
+            - `approve` — Use ONLY if ALL of the following hold:
+              1. You have zero new concerns AND you posted zero inline comments in this run.
+              2. The change is low-risk: not touching auth, sessions, billing, encryption, migrations, public APIs, or shared infrastructure/middleware.
+              3. You can name a CONCRETE reason it is safe — specific files touched, behavior preserved, and which tests exercise the change. Generic justifications like "looks fine", "no issues found", or "low risk" are NOT acceptable.
+              If you cannot meet all three, choose `defer` instead.
+            - `comment` — Use if you found new concerns and posted inline comments. Your `reasoning` should summarize the concerns in 1-3 sentences.
+            - `defer` — Use if the PR is too complex for confident automated review (architectural changes, many interacting systems, unfamiliar domain) OR if you are uncertain whether a change is safe. Briefly state why.
+
+            ## Self-check before writing the verdict
+            - If `decision` is `approve` and `reasoning` does not name specific files / behaviors / tests, change `decision` to `defer`.
+            - If `decision` is `approve` and `concerns_posted` > 0, change `decision` to `comment`.
+            - If `decision` is `comment` and `concerns_posted` == 0, change `decision` to `defer`.
+
+            ## Hard rules
+            - NEVER write a `decision` other than `approve`, `comment`, or `defer`.
+            - NEVER post duplicate inline comments that already exist on the PR.
+            - NEVER attempt to call `gh pr review` or `gh pr comment` — the tools are not available to you; the follow-up step posts the formal review.
+            - NEVER invoke `gh api` with `-X POST`, `-X PUT`, `-X PATCH`, `-X DELETE`, `--method`, `-f`, `-F`, or `--input`. The ONLY `gh api` invocation permitted is reading the `/comments` endpoint exactly as shown in Step 1. Any attempt to write through `gh api` will be blocked by the tool runner and dismissed by the workflow.
 
             ## Repo-specific rules
             ${{ inputs.review_rules }}
           claude_args: >-
             --max-turns ${{ inputs.max_turns }}
             --model ${{ inputs.model }}
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh api:*),Bash(gh pr review:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Write,Bash(gh api:repos/*/pulls/*/comments*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+      # Defense-in-depth: dismiss any approval review the AI may have created directly
+      # (e.g. by smuggling a write through `gh api` despite the tightened allowedTools glob).
+      # Filters to the current HEAD SHA so stale approvals from concurrent older-commit runs
+      # are left alone — GitHub already treats those as obsolete on a new push.
+      - name: Dismiss unauthorized AI approvals
+        if: steps.size.outputs.too_big != 'true'
+        run: |
+          set -euo pipefail
+          bot_user=$(gh api user --jq '.login')
+          unauthorized=$(
+            gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+              | jq -r --arg sha "$HEAD_SHA_AT_START" --arg bot "$bot_user" \
+                  '.[] | select(.user.login == $bot and .state == "APPROVED" and .commit_id == $sha) | .id'
+          )
+          if [ -z "$unauthorized" ]; then
+            exit 0
+          fi
+          while IFS= read -r review_id; do
+            [ -n "$review_id" ] || continue
+            echo "::warning::Dismissing unauthorized AI approval review $review_id on $HEAD_SHA_AT_START — bypassed verdict workflow."
+            gh api "repos/$REPO/pulls/$PR_NUMBER/reviews/$review_id/dismissals" \
+              -X PUT \
+              -f message="Auto-dismissed: AI reviewer submitted an approval outside the verdict workflow. The workflow will post the authoritative review next." \
+              >/dev/null
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Dismissed unauthorized AI approval review \`$review_id\` from \`$bot_user\`." >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$unauthorized"
+
+      - name: Apply verdict
+        id: apply
+        if: steps.size.outputs.too_big != 'true'
+        run: |
+          set -euo pipefail
+          verdict_file="$RUNNER_TEMP/ai-review/verdict.json"
+          body_file="$RUNNER_TEMP/ai-review/body.md"
+          reasoning_file="$RUNNER_TEMP/ai-review/reasoning.txt"
+          echo "did_approve=false" >> "$GITHUB_OUTPUT"
+
+          # Resolve decision + reasoning. All failure paths fall through to the case
+          # statement as `defer` so the check publishing step gets a clean signal.
+          decision=""
+          reasoning=""
+          concerns=0
+          if [ ! -s "$verdict_file" ]; then
+            echo "::warning::AI did not produce a verdict file; treating as defer."
+            decision="defer"
+            reasoning="Automated reviewer did not produce a verdict."
+          elif ! jq empty "$verdict_file" >/dev/null 2>&1; then
+            echo "::warning::Verdict file is not valid JSON; treating as defer."
+            decision="defer"
+            reasoning="Automated reviewer produced an invalid verdict."
+          else
+            decision=$(jq -r '.decision // ""' "$verdict_file")
+            reasoning=$(jq -r '.reasoning // ""' "$verdict_file")
+            concerns=$(jq -r '.concerns_posted // 0' "$verdict_file")
+            if [ -z "$reasoning" ]; then
+              decision="defer"
+              reasoning="Automated reviewer did not provide reasoning."
+            fi
+          fi
+          printf '%s\n' "$reasoning" > "$reasoning_file"
+
+          current_sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
+          current_sizes=$(
+            gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate \
+              | jq --arg pat "$TEST_FILE_REGEX" '{
+                  prod_lines: ([.[] | select(.filename | test($pat) | not) | .additions + .deletions] | add // 0),
+                  prod_files: ([.[] | select(.filename | test($pat) | not)] | length)
+                }'
+          )
+          current_prod_lines=$(echo "$current_sizes" | jq -r '.prod_lines')
+          current_prod_files=$(echo "$current_sizes" | jq -r '.prod_files')
+
+          # Safety: if HEAD moved, PR grew past the gate, or inline concerns were posted, never approve.
+          if [ "$decision" = "approve" ]; then
+            if [ "$current_sha" != "$HEAD_SHA_AT_START" ]; then
+              echo "::warning::HEAD moved during review ($HEAD_SHA_AT_START -> $current_sha); not approving."
+              decision="defer"
+              reasoning="New commits were pushed during the review. A fresh review will run on the latest HEAD."
+            elif [ "$current_prod_lines" -gt "$MAX_DIFF_LINES" ] || [ "$current_prod_files" -gt "$MAX_CHANGED_FILES" ]; then
+              echo "::warning::PR grew past size gate during review; not approving."
+              decision="defer"
+              reasoning="PR exceeded the size gate during review ($current_prod_lines production lines / $current_prod_files production files)."
+            elif [ "$concerns" != "0" ]; then
+              echo "::warning::AI requested approve but reported $concerns inline comments; downgrading to comment."
+              decision="comment"
+            fi
+          fi
+
+          case "$decision" in
+            approve)
+              {
+                echo "AI Review: Approved"
+                echo ""
+                echo "**Reasoning:** $reasoning"
+              } > "$body_file"
+              gh pr review "$PR_NUMBER" --repo "$REPO" --approve --body-file "$body_file"
+              echo "did_approve=true" >> "$GITHUB_OUTPUT"
+              echo "conclusion=success" >> "$GITHUB_OUTPUT"
+              echo "title=Approved by AI reviewer" >> "$GITHUB_OUTPUT"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "Posted **approval**. Reasoning: $reasoning" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            comment)
+              {
+                echo "AI Review: Found new concerns — see inline comments."
+                echo ""
+                echo "**Reasoning:** $reasoning"
+              } > "$body_file"
+              gh pr review "$PR_NUMBER" --repo "$REPO" --comment --body-file "$body_file"
+              echo "conclusion=neutral" >> "$GITHUB_OUTPUT"
+              echo "title=AI reviewer found concerns" >> "$GITHUB_OUTPUT"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "Posted **comment** review. Reasoning: $reasoning" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            defer|*)
+              {
+                echo "AI Review: Deferring to human review."
+                echo ""
+                echo "**Reasoning:** $reasoning"
+              } > "$body_file"
+              gh pr review "$PR_NUMBER" --repo "$REPO" --comment --body-file "$body_file"
+              echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+              echo "title=Deferred to human review" >> "$GITHUB_OUTPUT"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "Posted **deferral**. Reasoning: $reasoning" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+
+      - name: Notify Slack on approval
+        if: steps.apply.outputs.did_approve == 'true' && inputs.slack_channel != ''
+        env:
+          SLACK_CHANNEL: ${{ inputs.slack_channel }}
+          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SLACK_BOT_TOKEN" ]; then
+            echo "::warning::slack_channel is set but slack_bot_token secret is missing; skipping Slack notification."
+            exit 0
+          fi
+          pr_url="${GITHUB_SERVER_URL}/${REPO}/pull/${PR_NUMBER}"
+          pr_title=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title --jq '.title')
+          reasoning=$(cat "$RUNNER_TEMP/ai-review/reasoning.txt" 2>/dev/null || echo "")
+          payload=$(jq -n \
+            --arg channel "$SLACK_CHANNEL" \
+            --arg pr_url "$pr_url" \
+            --arg pr_num "$PR_NUMBER" \
+            --arg pr_title "$pr_title" \
+            --arg repo "$REPO" \
+            --arg reasoning "$reasoning" \
+            '{
+              channel: $channel,
+              text: ("AI auto-approved PR #" + $pr_num + " in " + $repo + ": " + $pr_title),
+              blocks: ([
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("*AI auto-approved:* <" + $pr_url + "|#" + $pr_num + " — " + $pr_title + ">\n_Repo: `" + $repo + "`_")
+                  }
+                }
+              ] + (if ($reasoning | length) > 0 then [{
+                type: "context",
+                elements: [{
+                  type: "mrkdwn",
+                  text: ("*Reasoning:* " + $reasoning)
+                }]
+              }] else [] end))
+            }')
+          response=$(curl -sS -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$payload")
+          ok=$(echo "$response" | jq -r '.ok // false')
+          if [ "$ok" != "true" ]; then
+            err=$(echo "$response" | jq -r '.error // "unknown"')
+            echo "::warning::Slack notification failed: $err"
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Posted Slack notification to \`$SLACK_CHANNEL\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Publishes a Check Run named "AI Code Review" pinned to the head SHA at job start.
+      # Conclusion is deterministic from the AI verdict (or the size gate):
+      #   approve -> success (green)
+      #   comment -> neutral (gray)
+      #   defer / size-gate / missing verdict -> skipped (gray)
+      # Branch protection should require this check, not the default workflow job check.
+      - name: Publish AI review check
+        if: always() && !cancelled()
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.size.outputs.too_big }}" = "true" ]; then
+            conclusion="skipped"
+            title="PR too large for automated review"
+            reasoning="Production lines: ${{ steps.size.outputs.prod_lines }} (limit $MAX_DIFF_LINES); production files: ${{ steps.size.outputs.prod_files }} (limit $MAX_CHANGED_FILES). Test changes excluded."
+          elif [ -n "${{ steps.apply.outputs.conclusion }}" ]; then
+            conclusion="${{ steps.apply.outputs.conclusion }}"
+            title="${{ steps.apply.outputs.title }}"
+            reasoning=$(cat "$RUNNER_TEMP/ai-review/reasoning.txt" 2>/dev/null || echo "(no reasoning recorded)")
+          else
+            conclusion="skipped"
+            title="AI reviewer did not complete"
+            reasoning="The reviewer workflow did not produce an outcome. See the workflow logs for details."
+          fi
+
+          # Size table for context — present whenever the size step ran.
+          size_table=""
+          if [ -s "$RUNNER_TEMP/ai-review/sizes.json" ]; then
+            size_table=$(jq -r '
+              "| | Production | Tests | Total |\n| --- | --- | --- | --- |\n" +
+              "| Lines changed | \(.prod_lines) | \(.test_lines) | \(.total_lines) |\n" +
+              "| Files changed | \(.prod_files) | \(.test_files) | \(.total_files) |"
+            ' "$RUNNER_TEMP/ai-review/sizes.json")
+          fi
+
+          summary=$(printf '**%s**\n\n%s\n\n%s\n' "$title" "$reasoning" "$size_table")
+
+          payload=$(jq -n \
+            --arg name "AI Code Review" \
+            --arg head_sha "$HEAD_SHA_AT_START" \
+            --arg conclusion "$conclusion" \
+            --arg title "$title" \
+            --arg summary "$summary" \
+            --arg details_url "${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}" \
+            '{
+              name: $name,
+              head_sha: $head_sha,
+              status: "completed",
+              conclusion: $conclusion,
+              details_url: $details_url,
+              output: { title: $title, summary: $summary }
+            }')
+
+          if ! gh api "repos/$REPO/check-runs" -X POST --input - <<< "$payload" >/dev/null; then
+            echo "::warning::Failed to publish AI Code Review check run."
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Published **AI Code Review** check run with conclusion \`$conclusion\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
