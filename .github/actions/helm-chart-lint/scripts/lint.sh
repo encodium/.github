@@ -16,6 +16,12 @@ set -euo pipefail
 CHART_PATH="${CHART_PATH:-./deployments}"
 RESERVED_KEYS="${RESERVED_KEYS:-app budget daemons envConfigMap image imagePullSecrets ingress keda replicas resources serviceAccount serviceAccountName vault}"
 
+# `app` is always implicitly reserved (Rule 5 requires it; the action.yml input
+# documents the per-chart list as "in addition to `app`"). Prepend defensively
+# so a caller that overrides reserved-chart-control-keys without restating
+# `app` does not produce a self-contradicting Rule 5 / Rule 6 failure.
+RESERVED_KEYS="app ${RESERVED_KEYS}"
+
 # Convention values-file regex (mirrors guideline §3.1):
 #   values.yaml | values-{local,stg,qa,prod,dev-ec2,qa-ec2,prod-ec2}.yaml
 #   plus Chart.yaml and the optional values.schema.json.
@@ -143,8 +149,11 @@ end
 info "Rule 6: top-level keys are reserved chart-control keys"
 
 # Normalize reserved list to a newline-separated set for grep -Fxqf.
+# `|| true` keeps the pipeline alive under `pipefail` when no lines survive
+# the filter (e.g. caller passed an empty RESERVED_KEYS) — Rule 6 then fires
+# loudly on every top-level key instead of the script dying silently.
 RESERVED_FILE="$(mktemp)"
-echo "$RESERVED_KEYS" | tr -s '[:space:]' '\n' | grep -v '^$' | sort -u > "$RESERVED_FILE"
+echo "$RESERVED_KEYS" | tr -s '[:space:]' '\n' | { grep -v '^$' || true; } | sort -u > "$RESERVED_FILE"
 
 while IFS= read -r -d '' f; do
     # Top-level keys only. yq returns one key per line.
@@ -174,7 +183,7 @@ if [[ -d "$CHART_PATH/templates" ]]; then
     # Scan every templates/*.yaml (and .tpl) for `if .Values.X` or `with .Values.X`
     # where X is the first dotted segment.
     RESERVED_LIST="$(mktemp)"
-    echo "$RESERVED_KEYS" | tr -s '[:space:]' '\n' | grep -v '^$' > "$RESERVED_LIST"
+    echo "$RESERVED_KEYS" | tr -s '[:space:]' '\n' | { grep -v '^$' || true; } > "$RESERVED_LIST"
 
     while IFS= read -r -d '' tmpl; do
         # grep returns lines like LINE:CONTENT (single file, no filename prefix).
