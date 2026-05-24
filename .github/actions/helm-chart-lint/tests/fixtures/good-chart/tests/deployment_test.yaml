@@ -1,0 +1,22 @@
+suite: deployment smoke-test
+templates:
+  - deployment.yaml
+tests:
+  - it: renders a Deployment named after the chart
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: good-chart
+
+  - it: renders one replica by default and sets each .Values.app key as an env var
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOG_LEVEL
+            value: info

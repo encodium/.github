@@ -185,15 +185,22 @@ if [[ -d "$CHART_PATH/templates" ]]; then
     RESERVED_LIST="$(mktemp)"
     echo "$RESERVED_KEYS" | tr -s '[:space:]' '\n' | { grep -v '^$' || true; } > "$RESERVED_LIST"
 
+    # Match `{{ if .Values.X }}`, `{{ with .Values.X }}`, `{{ else if .Values.X }}`,
+    # and `{{ else with .Values.X }}` — all four are render-gate forms whose root
+    # key must be in the reserved chart-control set. `else` alone (no following
+    # if/with) has no condition and is intentionally not matched.
+    DIRECTIVE_RE='(else[[:space:]]+)?(if|with)[[:space:]]+(\(?[[:space:]]*not[[:space:]]+)?\.Values\.'
+    LINE_RE="\\{\\{-?[[:space:]]*${DIRECTIVE_RE}"
+
     while IFS= read -r -d '' tmpl; do
         # grep returns lines like LINE:CONTENT (single file, no filename prefix).
         while IFS= read -r hit; do
             [[ -z "$hit" ]] && continue
             line="${hit%%:*}"
             content="${hit#*:}"
-            # Extract just the matched root key. Look for the first dotted
-            # segment after `.Values.` in an `if` or `with` Go-template directive.
-            root="$(echo "$content" | grep -oE '(if|with)[[:space:]]+(\(?[[:space:]]*not[[:space:]]+)?\.Values\.[A-Za-z_][A-Za-z0-9_]*' \
+            # Extract just the matched root key — the first dotted segment after
+            # `.Values.` in the directive.
+            root="$(echo "$content" | grep -oE "${DIRECTIVE_RE}[A-Za-z_][A-Za-z0-9_]*" \
                 | head -n1 \
                 | grep -oE '\.Values\.[A-Za-z_][A-Za-z0-9_]*' \
                 | sed 's/^\.Values\.//')"
@@ -203,7 +210,7 @@ if [[ -d "$CHART_PATH/templates" ]]; then
             if ! grep -Fxq "$root" "$RESERVED_LIST"; then
                 fail "${tmpl}:${line}: render gate \`.Values.${root}\` is not an approved chart-control key. Use a per-resource \`.<resource>.enabled\` flag (e.g. \`.envConfigMap.enabled\`)."
             fi
-        done < <(grep -nE '\{\{-?[[:space:]]*(if|with)[[:space:]]+(\(?[[:space:]]*not[[:space:]]+)?\.Values\.' "$tmpl" || true)
+        done < <(grep -nE "$LINE_RE" "$tmpl" || true)
     done < <(find "$CHART_PATH/templates" -type f \( -name '*.yaml' -o -name '*.tpl' \) -print0)
 
     rm -f "$RESERVED_LIST"

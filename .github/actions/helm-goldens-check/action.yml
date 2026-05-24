@@ -24,9 +24,9 @@ inputs:
     default: v3.16.4
 
   helm-unittest-version:
-    description: helm-unittest plugin version.
+    description: helm-unittest plugin version (must match a published tag at https://github.com/helm-unittest/helm-unittest/releases, including the `v` prefix).
     required: false
-    default: 0.6.2
+    default: v1.0.3
 
   skip-layer1:
     description: Skip the Layer 1 (within-path) helm-unittest run. Use only for charts that have no `tests/` dir yet.

@@ -7,4 +7,11 @@ data:
   content: |
     APP_BASE_PATH="{{ .Values.ec2.appBasePath }}"
     VPC_HOST="{{ .Values.topo.vpc_host }}"
+{{- else if .Values.aws }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-env-cloud
+data:
+  region: "{{ .Values.aws.region }}"
 {{- end }}
