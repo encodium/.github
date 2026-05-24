@@ -1,0 +1,66 @@
+name: Test helm-chart actions
+
+on:
+  pull_request:
+    paths:
+      - ".github/actions/helm-chart-lint/**"
+      - ".github/actions/helm-goldens-check/**"
+      - ".github/workflows/test-helm-actions.yaml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/actions/helm-chart-lint/**"
+      - ".github/actions/helm-goldens-check/**"
+
+jobs:
+  lint-good-fixture:
+    name: lint passes on convention-compliant fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/helm-chart-lint
+        with:
+          chart-path: .github/actions/helm-chart-lint/tests/fixtures/good-chart
+
+  lint-bad-fixture:
+    name: lint fails on unmigrated fixture (smoke test — must exit non-zero)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - name: Install yq (matching action default)
+        shell: bash
+        run: |
+          sudo curl -sSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Run lint and assert non-zero exit
+        shell: bash
+        env:
+          CHART_PATH: .github/actions/helm-chart-lint/tests/fixtures/bad-chart
+          RESERVED_KEYS: >-
+            app budget daemons envConfigMap image imagePullSecrets ingress keda
+            replicas resources serviceAccount serviceAccountName vault
+        run: |
+          set +e
+          ./.github/actions/helm-chart-lint/scripts/lint.sh
+          rc=$?
+          set -e
+          if [[ "$rc" -eq 0 ]]; then
+            echo "::error::linter unexpectedly passed against bad-chart fixture"
+            exit 1
+          fi
+          echo "linter exited $rc as expected"
+
+  goldens-good-fixture:
+    name: goldens-check passes on minimal good fixture (skip flags engaged)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/helm-goldens-check
+        with:
+          chart-path: .github/actions/helm-chart-lint/tests/fixtures/good-chart
+          goldens-path: .github/actions/helm-chart-lint/tests/fixtures/good-chart/golden
+          skip-layer1: "true"
+          skip-cross-path: "true"

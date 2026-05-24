@@ -1,0 +1,6 @@
+apiVersion: v2
+name: bad-chart
+description: A non-compliant fixture used to prove helm-chart-lint catches violations.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
