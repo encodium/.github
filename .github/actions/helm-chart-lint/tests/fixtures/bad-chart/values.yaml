@@ -1,0 +1,14 @@
+topo:
+  vpc_host: stg.example.local
+
+aws:
+  region: us-west-2
+
+ec2:
+  appBasePath: /opt/app
+
+image:
+  repository: example/bad
+  tag: "0.1.0"
+
+replicas: 1

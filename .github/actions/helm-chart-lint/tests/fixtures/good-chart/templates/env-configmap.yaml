@@ -1,0 +1,11 @@
+{{- if .Values.envConfigMap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-env
+data:
+  content: |
+    {{- range $k, $v := .Values.app }}
+    {{ $k | upper }}="{{ $v }}"
+    {{- end }}
+{{- end }}

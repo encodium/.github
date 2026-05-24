@@ -1,0 +1,74 @@
+name: Helm chart lint
+description: >-
+  Enforce the org-wide Helm chart convention: values-file names, single `.Values.app`
+  namespace, template filenames that reflect kind + consumer, and approved render-gate
+  keys. See encodium/dump/aronneseth/helm_chart_naming_guideline.plan.md §3.1.
+
+inputs:
+  chart-path:
+    description: Path to the chart directory (the dir containing Chart.yaml + values.yaml + templates/).
+    required: false
+    default: ./deployments
+
+  helm-version:
+    description: Helm version to install for the `helm template` render check.
+    required: false
+    default: v3.16.4
+
+  yq-version:
+    description: yq version (mikefarah/yq) to install for YAML inspection.
+    required: false
+    default: v4.44.3
+
+  reserved-chart-control-keys:
+    description: >-
+      Whitespace-separated list of allowed top-level keys in values files (in addition to `app`).
+      Chart-local additions (e.g. extra per-resource gates) can be appended via this input
+      without modifying the central action.
+    required: false
+    default: >-
+      app
+      budget
+      daemons
+      envConfigMap
+      image
+      imagePullSecrets
+      ingress
+      keda
+      replicas
+      resources
+      serviceAccount
+      serviceAccountName
+      vault
+
+runs:
+  using: composite
+  steps:
+    - name: Install helm
+      uses: azure/setup-helm@v4
+      with:
+        version: ${{ inputs.helm-version }}
+
+    - name: Install yq
+      shell: bash
+      env:
+        YQ_VERSION: ${{ inputs.yq-version }}
+      run: |
+        set -euo pipefail
+        if command -v yq >/dev/null 2>&1; then
+          installed="$(yq --version 2>&1 | grep -oE 'v[0-9.]+' | head -n1 || true)"
+          if [[ "$installed" == "${YQ_VERSION}" ]]; then
+            echo "yq ${YQ_VERSION} already installed"
+            exit 0
+          fi
+        fi
+        sudo curl -sSL -o /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+        sudo chmod +x /usr/local/bin/yq
+        yq --version
+
+    - name: Lint chart
+      shell: bash
+      env:
+        CHART_PATH: ${{ inputs.chart-path }}
+        RESERVED_KEYS: ${{ inputs.reserved-chart-control-keys }}
+      run: ${{ github.action_path }}/scripts/lint.sh

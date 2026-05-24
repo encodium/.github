@@ -1,0 +1,73 @@
+name: Helm goldens check
+description: >-
+  Regenerate per-path goldens + cross-path baseline for a chart and fail when the
+  diff against committed snapshots is non-empty. Layer 1 (EKS-Helm path) runs via
+  helm-unittest when `<chart-path>/tests/` exists. Layer 1 (SetupPkg + Helm-EC2)
+  and Layer 2 (cross-path baseline) are delegated to per-chart regenerate hooks
+  the convention runbook commits into `<goldens-path>/`.
+  See encodium/dump/aronneseth/helm_chart_naming_guideline.plan.md §3.2.
+
+inputs:
+  chart-path:
+    description: Path to the chart directory.
+    required: false
+    default: ./deployments
+
+  goldens-path:
+    description: Path to the committed goldens directory (relative to the repo root).
+    required: false
+    default: ./deployments/golden
+
+  helm-version:
+    description: Helm version to install.
+    required: false
+    default: v3.16.4
+
+  helm-unittest-version:
+    description: helm-unittest plugin version (must match a published tag at https://github.com/helm-unittest/helm-unittest/releases, including the `v` prefix).
+    required: false
+    default: v1.0.3
+
+  skip-layer1:
+    description: Skip the Layer 1 (within-path) helm-unittest run. Use only for charts that have no `tests/` dir yet.
+    required: false
+    default: "false"
+
+  skip-cross-path:
+    description: Skip the Layer 2 (cross-path baseline) diff. Use only for charts that have not yet committed a cross-path baseline.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install helm
+      uses: azure/setup-helm@v4
+      with:
+        version: ${{ inputs.helm-version }}
+
+    - name: Install helm-unittest plugin
+      shell: bash
+      env:
+        HELM_UNITTEST_VERSION: ${{ inputs.helm-unittest-version }}
+        SKIP_LAYER1: ${{ inputs.skip-layer1 }}
+      run: |
+        set -euo pipefail
+        if [[ "$SKIP_LAYER1" == "true" ]]; then
+          echo "skip-layer1=true → not installing helm-unittest"
+          exit 0
+        fi
+        if helm plugin list 2>/dev/null | grep -q '^unittest'; then
+          echo "helm-unittest already installed"
+        else
+          helm plugin install https://github.com/helm-unittest/helm-unittest.git --version "$HELM_UNITTEST_VERSION"
+        fi
+
+    - name: Run goldens check
+      shell: bash
+      env:
+        CHART_PATH: ${{ inputs.chart-path }}
+        GOLDENS_PATH: ${{ inputs.goldens-path }}
+        SKIP_LAYER1: ${{ inputs.skip-layer1 }}
+        SKIP_CROSS_PATH: ${{ inputs.skip-cross-path }}
+      run: ${{ github.action_path }}/scripts/check.sh
