@@ -28,7 +28,7 @@ on:
         type: number
         default: 30
       slack_channel:
-        description: "Optional Slack channel (e.g. '#dev-account-experience-4all') to notify when the AI auto-approves a PR. Requires slack_bot_token secret."
+        description: "Optional Slack channel (e.g. '#dev-account-experience-4all') to notify the first time the AI would have approved a PR (candidate for a quick human review). Requires slack_bot_token secret."
         required: false
         type: string
         default: ""
@@ -174,7 +174,7 @@ jobs:
             }
 
             ## Decision rules
-            - `approve` — Use ONLY if ALL of the following hold:
+            - `approve` — Use ONLY if ALL of the following hold. NOTE: this verdict does NOT cause a formal GitHub approval. The workflow posts a comment review on your behalf saying "I would have approved this PR for the following reasons", which flags the PR as a candidate for a quick human review. Human approval is always required.
               1. You have zero new concerns AND you posted zero inline comments in this run.
               2. The change is low-risk: not touching auth, sessions, billing, encryption, migrations, public APIs, or shared infrastructure/middleware.
               3. You can name a CONCRETE reason it is safe — specific files touched, behavior preserved, and which tests exercise the change. Generic justifications like "looks fine", "no issues found", or "low risk" are NOT acceptable.
@@ -236,7 +236,7 @@ jobs:
           verdict_file="$RUNNER_TEMP/ai-review/verdict.json"
           body_file="$RUNNER_TEMP/ai-review/body.md"
           reasoning_file="$RUNNER_TEMP/ai-review/reasoning.txt"
-          echo "did_approve=false" >> "$GITHUB_OUTPUT"
+          echo "would_have_approved=false" >> "$GITHUB_OUTPUT"
 
           # Resolve decision + reasoning. All failure paths fall through to the case
           # statement as `defer` so the check publishing step gets a clean signal.
@@ -291,17 +291,22 @@ jobs:
 
           case "$decision" in
             approve)
+              # The first line "AI Review: Would have approved" is a stable marker used
+              # by the Slack step to dedupe notifications across re-runs of this PR.
+              # Do NOT change the prefix without updating that step too.
               {
-                echo "AI Review: Approved"
+                echo "AI Review: Would have approved — human review still required."
                 echo ""
-                echo "**Reasoning:** $reasoning"
+                echo "I would have approved this PR for the following reasons:"
+                echo ""
+                echo "$reasoning"
               } > "$body_file"
-              gh pr review "$PR_NUMBER" --repo "$REPO" --approve --body-file "$body_file"
-              echo "did_approve=true" >> "$GITHUB_OUTPUT"
+              gh pr review "$PR_NUMBER" --repo "$REPO" --comment --body-file "$body_file"
+              echo "would_have_approved=true" >> "$GITHUB_OUTPUT"
               echo "conclusion=success" >> "$GITHUB_OUTPUT"
-              echo "title=Approved by AI reviewer" >> "$GITHUB_OUTPUT"
+              echo "title=AI would have approved" >> "$GITHUB_OUTPUT"
               echo "" >> "$GITHUB_STEP_SUMMARY"
-              echo "Posted **approval**. Reasoning: $reasoning" >> "$GITHUB_STEP_SUMMARY"
+              echo "Posted **would-have-approved** comment. Reasoning: $reasoning" >> "$GITHUB_STEP_SUMMARY"
               ;;
             comment)
               {
@@ -329,8 +334,8 @@ jobs:
               ;;
           esac
 
-      - name: Notify Slack on approval
-        if: steps.apply.outputs.did_approve == 'true' && inputs.slack_channel != ''
+      - name: Notify Slack first time AI would have approved
+        if: steps.apply.outputs.would_have_approved == 'true' && inputs.slack_channel != ''
         env:
           SLACK_CHANNEL: ${{ inputs.slack_channel }}
           SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
@@ -338,6 +343,24 @@ jobs:
           set -euo pipefail
           if [ -z "$SLACK_BOT_TOKEN" ]; then
             echo "::warning::slack_channel is set but slack_bot_token secret is missing; skipping Slack notification."
+            exit 0
+          fi
+          # PR-lifetime dedupe: count bot-authored reviews whose body starts with the
+          # marker emitted by the approve arm of "Apply verdict". The review we just
+          # posted is included in the listing, so the first-ever would-have-approved
+          # run sees exactly 1; subsequent runs see >= 2 and skip Slack.
+          bot_user=$(gh api user --jq '.login')
+          prior_count=$(
+            gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+              | jq --arg bot "$bot_user" '
+                  [.[] | select(.user.login == $bot
+                    and ((.body // "") | startswith("AI Review: Would have approved")))]
+                  | length
+              '
+          )
+          if [ "$prior_count" -gt 1 ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Skipping Slack — AI has already would-have-approved this PR ($prior_count total)." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           pr_url="${GITHUB_SERVER_URL}/${REPO}/pull/${PR_NUMBER}"
@@ -352,13 +375,13 @@ jobs:
             --arg reasoning "$reasoning" \
             '{
               channel: $channel,
-              text: ("AI auto-approved PR #" + $pr_num + " in " + $repo + ": " + $pr_title),
+              text: ("AI candidate for quick review: PR #" + $pr_num + " in " + $repo + ": " + $pr_title),
               blocks: ([
                 {
                   type: "section",
                   text: {
                     type: "mrkdwn",
-                    text: ("*AI auto-approved:* <" + $pr_url + "|#" + $pr_num + " — " + $pr_title + ">\n_Repo: `" + $repo + "`_")
+                    text: ("*AI would have approved* (candidate for quick review): <" + $pr_url + "|#" + $pr_num + " — " + $pr_title + ">\n_Repo: `" + $repo + "`_")
                   }
                 }
               ] + (if ($reasoning | length) > 0 then [{
