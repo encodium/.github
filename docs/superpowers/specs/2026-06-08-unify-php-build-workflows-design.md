@@ -1,0 +1,202 @@
+# Unify PHP build workflows into shared reusable orchestrators
+
+- **Date:** 2026-06-08
+- **Tickets:** DEVEX-1630 (Phase 1, this spec) — blocked by DEVEX-1629 (Phase 0, the gate fix)
+- **Repos affected:** `encodium/.github` (shared workflows) + 6 PHP service repos
+
+## Problem
+
+The six PHP service repos each carry a full, copy-pasted `Build.yaml`
+(`calculate-tag → build images → tag-and-release → integration-deploy`). They have
+already drifted back together and are now near-identical, which means every
+fleet-wide build change must be made six times. The immediate trigger was
+DEVEX-1629 ("hotfix builds are being deployed to the integration environment"):
+the same one-line fix has to land in six places.
+
+## Goal
+
+Move the shared build spine into reusable workflows in `encodium/.github` so the
+next fleet-wide change is one edit, not six — without changing any image tags that
+deploy/helm consumers depend on.
+
+## Scope
+
+In scope — the six PHP services, split by application class:
+
+| Repo | Class (`artisan`?) | Build primitive | Images today |
+|---|---|---|---|
+| rp_api | v1 (no) | `php-build-push` matrix | `app`, `app-profiler`, `nginx` |
+| internal_api | v1 (no) | `php-build-push` matrix | `app`, `app-profiler`, `nginx` |
+| catalog_api | v1 (no) | `php-build-push` matrix | `app`, `nginx` |
+| license_api | v1 (no) | `php-build-push` matrix | `app`, `nginx` |
+| returns-api | Laravel (yes) | `php-laravel-build-push` | `app`, `nginx` |
+| accounts-api | Laravel (yes) | `php-laravel-build-push` | `app`, `webserver` (already migrated) |
+
+Out of scope: webstore, checkout, manage (Node/frontend; bespoke builds, no
+`artisan`-vs-v1 fit). Any change to the deploy engine itself
+(`helm-deploy-eks.yaml`) — deploy stays as-is.
+
+## Phase 0 — the gate (DEVEX-1629, lands first)
+
+Add a trigger gate to the existing `integration-deploy` job in all six repos:
+
+```yaml
+integration-deploy:
+  needs: [tag-and-release]
+  if: ${{ github.event_name == 'push' }}   # keep push→integration CD; skip on hotfix dispatch
+  uses: ./.github/workflows/Integration EKS Deploy.yaml   # (hyphenated in internal_api)
+  with: { image_tag: ${{ needs.tag-and-release.outputs.tag }} }
+  secrets: inherit
+```
+
+Push to `main` still deploys to integration; hotfix `workflow_dispatch` builds,
+tags, and releases but does not deploy. Intentional integration deploys use the
+standalone `Integration EKS Deploy.yaml` dispatch. Six small PRs, very low risk.
+
+This is the same job that survives into Phase 1 (see below), so Phase 0 is not
+throwaway.
+
+## Phase 1 — unification design
+
+### Two orchestrators (not one parametrized file)
+
+Mirrors the existing helper split and avoids skipped-job / `needs` gymnastics:
+
+- **`encodium/.github/.github/workflows/build-php-v1.yaml`** — for the four v1 repos.
+- **`encodium/.github/.github/workflows/build-php-laravel.yaml`** — for the two Laravel repos.
+
+Both implement the identical spine and expose a `tag` output:
+
+```
+calculate-tag (dry run, release_branches: stage,hotfix,rc, fetch_all_tags: true)
+   → build            (differs per orchestrator — see below)
+   → tag-and-release  (real bump + GitHub prerelease; output: tag)
+```
+
+### Build job — v1 orchestrator
+
+Fan out over an `images` JSON array, one call to `php-build-push.yaml` per image,
+via a matrix on the reusable-workflow `uses:`:
+
+```yaml
+build:
+  needs: [calculate-tag]
+  strategy:
+    matrix:
+      image: ${{ fromJSON(inputs.images) }}
+  uses: encodium/.github/.github/workflows/php-build-push.yaml@main
+  with:
+    image_name: ${{ matrix.image.image_name }}   # default github.repository
+    dockerfile: ${{ matrix.image.dockerfile }}
+    build_target: ${{ matrix.image.target }}
+    tag: ${{ matrix.image.tag_prefix }}${{ needs.calculate-tag.outputs.tag }}
+  secrets: inherit
+```
+
+Per-repo `images` reproduce **today's exact tags** (verified against `main`):
+
+| Image | `image_name` | `dockerfile` | `target` | tag | extra |
+|---|---|---|---|---|---|
+| app | `<repo>` | `./build/app/Dockerfile` | `app` | `<tag>` | `+ :latest` |
+| nginx | `<repo>` | `./build/nginx/Dockerfile` | _(none)_ | `nginx-<tag>` | `+ :nginx-latest` |
+| profiler | `<repo>-profiler` | `./build/app/Dockerfile` | `app-profiler` | `<tag>` | `+ :latest` |
+
+> Profiler is a **separate image name** (`ghcr.io/<repo>-profiler:<tag>`), not a tag
+> prefix. Only rp_api and internal_api include it.
+
+### `php-build-push.yaml` modernization (prerequisite for the v1 path)
+
+The current helper cannot reproduce these tags as-is. Required changes:
+
+1. Add `image_name` input (default `${{ github.repository }}`) so profiler can target `<repo>-profiler`.
+2. Push the `latest` companion tag (`:latest` or `:<prefix>latest`) — add an
+   `extra_tag`/`push_latest` input; repos currently push both.
+3. Bump action versions to match the rest of the fleet:
+   `setup-buildx-action@v1→v3`, `login-action@v1→v3`, `build-push-action@v2→v6`.
+4. Cache: current helper uses `type=registry` buildcache; the repos' inline builds
+   use `type=gha`. Pick one in the pilot (lean `type=gha` to match current behavior)
+   and apply consistently.
+
+Before editing, grep for other consumers of `php-build-push.yaml` across the org;
+bump conservatively and verify none break.
+
+### Build job — Laravel orchestrator
+
+Single call to the existing `php-laravel-build-push.yaml` (app + webserver toggles,
+runs `artisan config:cache/route:cache/view:cache`). accounts-api already uses it.
+
+Two consumer-affecting changes apply when **returns-api** moves onto it, both to be
+validated on its pilot:
+
+1. **Proxy tag prefix changes `nginx-` → `webserver-`.** The Laravel helper hardcodes
+   `webserver-<tag>`; returns-api currently publishes `nginx-<tag>`. accounts-api
+   already uses `webserver-`. **Decision (recommended): align returns-api to
+   `webserver-`** and update its deploy/helm values to consume it, standardizing the
+   cohort. (Alternative: add a `webserver_tag_prefix` input to the helper to preserve
+   `nginx-` — only if the deploy-side change is undesirable.)
+2. **Artisan caching is newly introduced.** returns-api's current inline build does
+   not run `artisan *:cache`. The helper does. Laravel `config:cache` can fail if
+   build-time env is missing; accounts-api proves it is solvable. Verify the
+   returns-api image boots correctly after the pilot build.
+
+### Deploy stays in the thin caller (hard constraint)
+
+A reusable workflow's `uses: ./.github/workflows/...` resolves inside
+`encodium/.github`, **not** the caller — so the orchestrators cannot invoke a repo's
+local `Integration EKS Deploy.yaml`. Therefore the gated `integration-deploy` job
+**remains in each repo's `Build.yaml`**, consuming the orchestrator's `tag` output:
+
+```yaml
+jobs:
+  build:
+    uses: encodium/.github/.github/workflows/build-php-v1.yaml@main   # or -laravel
+    with:
+      images: '[ ... per-repo ... ]'        # v1 only
+    secrets: inherit
+
+  integration-deploy:
+    needs: [build]
+    if: ${{ github.event_name == 'push' }}  # the Phase 0 gate, unchanged
+    uses: ./.github/workflows/Integration EKS Deploy.yaml
+    with: { image_tag: ${{ needs.build.outputs.tag }} }
+    secrets: inherit
+```
+
+Each `Build.yaml` collapses from ~130 lines to a ~25-line caller plus this gated
+deploy job. accounts-api additionally keeps its OpenAPI client-generation jobs in its
+own caller (caller-specific, out of the shared spine).
+
+## Rollout
+
+1. Modernize `php-build-push.yaml` (additive inputs + version bumps); confirm no other consumers break.
+2. Author `build-php-v1.yaml` and `build-php-laravel.yaml`.
+3. **Pilot v1** on **license_api** (simplest: app + nginx, no profiler). Verify a
+   `push` build produces identical tags and the integration deploy runs; verify a
+   `workflow_dispatch` build skips deploy.
+4. **Pilot Laravel** on **returns-api** (also validates the `webserver-` prefix change
+   and new artisan caching). Verify image boots.
+5. Fan out: rp_api, internal_api, catalog_api (v1, incl. profiler validation on
+   rp_api/internal_api); accounts-api (Laravel — mostly a thin-caller refactor since it
+   already calls the helper).
+
+Each repo is its own PR; the shared-workflow PR(s) to `encodium/.github` merge first
+and are referenced `@main`.
+
+## Risks
+
+- **Tag fidelity** → reproduced verbatim via the `images` matrix and the
+  `php-build-push` `image_name`/latest-tag inputs; pilots diff produced tags against
+  current before fan-out.
+- **Matrix + reusable `uses:` + `secrets: inherit`** → supported by Actions; validated
+  on the v1 pilot before fan-out.
+- **returns-api proxy-prefix / artisan changes** → isolated to the returns-api pilot;
+  recommended path standardizes on `webserver-` and adds artisan caching, both verified
+  on that one repo first.
+- **Shared `php-build-push.yaml` edit blast radius** → grep consumers first; changes are
+  additive (new optional inputs) + conservative version bumps.
+
+## Out of scope
+
+- Node/frontend repos (webstore, checkout, manage).
+- The deploy engine (`helm-deploy-eks.yaml`) and the standalone deploy workflows.
+- Staging-deploy decoupling (DEVEX-1087) — related but separate.
