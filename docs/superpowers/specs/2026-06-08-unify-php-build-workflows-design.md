@@ -21,20 +21,37 @@ deploy/helm consumers depend on.
 
 ## Scope
 
-In scope — the six PHP services, split by application class:
+In scope — nine PHP services, split by application class. Determined by an
+org-wide sweep (`shivammathur/setup-php` in build workflows + root `artisan` marker):
 
-| Repo | Class (`artisan`?) | Build primitive | Images today |
-|---|---|---|---|
-| rp_api | v1 (no) | `php-build-push` matrix | `app`, `app-profiler`, `nginx` |
-| internal_api | v1 (no) | `php-build-push` matrix | `app`, `app-profiler`, `nginx` |
-| catalog_api | v1 (no) | `php-build-push` matrix | `app`, `nginx` |
-| license_api | v1 (no) | `php-build-push` matrix | `app`, `nginx` |
-| returns-api | Laravel (yes) | `php-laravel-build-push` | `app`, `nginx` |
-| accounts-api | Laravel (yes) | `php-laravel-build-push` | `app`, `webserver` (already migrated) |
+| Repo | Class (`artisan`?) | Build primitive | Images today | Deploy |
+|---|---|---|---|---|
+| rp_api | v1 (no) | `php-build-push` matrix | `app`, `app-profiler`, `nginx` | integration |
+| internal_api | v1 (no) | `php-build-push` matrix | `app`, `app-profiler`, `nginx` | integration |
+| catalog_api | v1 (no) | `php-build-push` matrix | `app`, `nginx` | integration |
+| license_api | v1 (no) | `php-build-push` matrix | `app`, `nginx` | integration |
+| radmin | v1 (no) | `php-build-push` matrix | `app`, `nginx` | **staging** |
+| webstore | v1 (no) | `php-build-push` matrix | `app`, `app-profiler`, `nginx`, `apache` | integration |
+| returns-api | Laravel (yes) | `php-laravel-build-push` | `app`, `nginx` | integration |
+| accounts-api | Laravel (yes) | `php-laravel-build-push` | `app`, `webserver` (already migrated) | integration |
+| vin_decoder_service | Laravel (yes) | `php-laravel-build-push` | `app`, `nginx` | **staging** |
 
-Out of scope: webstore, checkout, manage (Node/frontend; bespoke builds, no
-`artisan`-vs-v1 fit). Any change to the deploy engine itself
-(`helm-deploy-eks.yaml`) — deploy stays as-is.
+`radmin` and `vin_decoder_service` deploy to **staging** via their own
+repo-specific `deploy-eks.yaml` (not integration). Since deploy stays in the caller
+(below), this is just a different deploy job in those two callers; the build
+unification applies unchanged. The Phase 0 integration gate (DEVEX-1629) does not
+apply to them — their staging auto-deploy is a separate DEVEX-1087 concern.
+
+`webstore` is a v1 PHP build **plus** a Node asset-publish step; only the PHP image
+builds are unified here (see "webstore" below).
+
+Out of scope:
+- **batch** — builds/deploys to EC2 via SSM (`build-ec2.yaml`), an entirely different
+  model. Left untouched.
+- **rp-cli-zero** — `build-and-release.yaml` only runs composer + `action-gh-release`;
+  builds no deployable image.
+- **checkout, manage** — Node/frontend, no PHP.
+- The deploy engine (`helm-deploy-eks.yaml`) and standalone deploy workflows — unchanged.
 
 ## Phase 0 — the gate (DEVEX-1629, lands first)
 
@@ -95,14 +112,17 @@ build:
 
 Per-repo `images` reproduce **today's exact tags** (verified against `main`):
 
-| Image | `image_name` | `dockerfile` | `target` | tag | extra |
-|---|---|---|---|---|---|
-| app | `<repo>` | `./build/app/Dockerfile` | `app` | `<tag>` | `+ :latest` |
-| nginx | `<repo>` | `./build/nginx/Dockerfile` | _(none)_ | `nginx-<tag>` | `+ :nginx-latest` |
-| profiler | `<repo>-profiler` | `./build/app/Dockerfile` | `app-profiler` | `<tag>` | `+ :latest` |
+| Image | `image_name` | `dockerfile` | `target` | tag | extra | repos |
+|---|---|---|---|---|---|---|
+| app | `<repo>` | `./build/app/Dockerfile` | `app` | `<tag>` | `+ :latest` | all v1 |
+| nginx | `<repo>` | `./build/nginx/Dockerfile` | _(none)_ | `nginx-<tag>` | `+ :nginx-latest` | all v1 |
+| profiler | `<repo>-profiler` | `./build/app/Dockerfile` | `app-profiler` | `<tag>` | `+ :latest` | rp_api, internal_api, webstore |
+| apache | `<repo>` | `./build/apache/Dockerfile` | _(none)_ | `apache-<tag>` | `+ :apache-latest` | webstore only |
 
 > Profiler is a **separate image name** (`ghcr.io/<repo>-profiler:<tag>`), not a tag
-> prefix. Only rp_api and internal_api include it.
+> prefix. `nginx`/`apache` are prefixed tags on the same image. The matrix carries
+> only the images a given repo declares — extra image types (profiler, apache) need no
+> orchestrator change, just additional matrix entries.
 
 ### `php-build-push.yaml` modernization (prerequisite for the v1 path)
 
@@ -120,13 +140,31 @@ The current helper cannot reproduce these tags as-is. Required changes:
 Before editing, grep for other consumers of `php-build-push.yaml` across the org;
 bump conservatively and verify none break.
 
+### webstore (special case, v1)
+
+webstore's current `build-app` job interleaves a **Node asset publish** (npm build →
+gzip → `aws s3 cp` to CDN → **`rm -rf dist`**) with the PHP image build. Because the
+`dist` folder is removed *before* `docker build`, the app image does **not** bake in
+Node assets — they are CDN-served. So the PHP images (app, profiler, nginx, apache)
+delegate to `build-php-v1.yaml` like any other v1 repo, and the Node/S3 asset publish
+is extracted into a **standalone job in webstore's caller** (no PHP/composer; needs the
+existing AWS/S3 + npm secrets). The asset-publish job and the build orchestrator both
+fan from `calculate-tag`; neither depends on the other.
+
+This makes webstore the most involved v1 migration — do it **last** in the v1 fan-out,
+after the matrix path is proven on simpler repos.
+
 ### Build job — Laravel orchestrator
 
 Single call to the existing `php-laravel-build-push.yaml` (app + webserver toggles,
 runs `artisan config:cache/route:cache/view:cache`). accounts-api already uses it.
+Its `dockerfile_app_path`/`dockerfile_webserver_path` defaults
+(`./build/Dockerfile-app`, `./build/Dockerfile-nginx`) already match returns-api and
+vin_decoder_service.
 
-Two consumer-affecting changes apply when **returns-api** moves onto it, both to be
-validated on its pilot:
+Two consumer-affecting changes apply when **returns-api** and **vin_decoder_service**
+move onto it (both currently tag proxy `nginx-` and run no artisan cache), to be
+validated on each repo's first build:
 
 1. **Proxy tag prefix changes `nginx-` → `webserver-`.** The Laravel helper hardcodes
    `webserver-<tag>`; returns-api currently publishes `nginx-<tag>`. accounts-api
@@ -163,8 +201,13 @@ jobs:
 ```
 
 Each `Build.yaml` collapses from ~130 lines to a ~25-line caller plus this gated
-deploy job. accounts-api additionally keeps its OpenAPI client-generation jobs in its
-own caller (caller-specific, out of the shared spine).
+deploy job. Caller-specific jobs stay in the caller:
+
+- **radmin, vin_decoder_service** keep their existing `stage-eks-deploy`
+  (`encodium/<repo>/.github/workflows/deploy-eks.yaml@main`, `stg-eks-values.yaml`)
+  instead of an integration-deploy job — no Phase 0 gate.
+- **webstore** keeps the extracted Node/S3 asset-publish job.
+- **accounts-api** keeps its OpenAPI client-generation jobs.
 
 ## Rollout
 
@@ -175,9 +218,12 @@ own caller (caller-specific, out of the shared spine).
    `workflow_dispatch` build skips deploy.
 4. **Pilot Laravel** on **returns-api** (also validates the `webserver-` prefix change
    and new artisan caching). Verify image boots.
-5. Fan out: rp_api, internal_api, catalog_api (v1, incl. profiler validation on
-   rp_api/internal_api); accounts-api (Laravel — mostly a thin-caller refactor since it
-   already calls the helper).
+5. Fan out v1: rp_api, internal_api, catalog_api (incl. profiler validation on
+   rp_api/internal_api), radmin (staging deploy), then **webstore last** (Node/S3
+   asset-publish extraction + apache image).
+6. Fan out Laravel: vin_decoder_service (same `nginx-`→`webserver-` + artisan changes
+   as the returns-api pilot, staging deploy), accounts-api (mostly a thin-caller
+   refactor since it already calls the helper).
 
 Each repo is its own PR; the shared-workflow PR(s) to `encodium/.github` merge first
 and are referenced `@main`.
@@ -189,14 +235,20 @@ and are referenced `@main`.
   current before fan-out.
 - **Matrix + reusable `uses:` + `secrets: inherit`** → supported by Actions; validated
   on the v1 pilot before fan-out.
-- **returns-api proxy-prefix / artisan changes** → isolated to the returns-api pilot;
-  recommended path standardizes on `webserver-` and adds artisan caching, both verified
-  on that one repo first.
+- **Laravel proxy-prefix / artisan changes** → affects returns-api and
+  vin_decoder_service; recommended path standardizes on `webserver-` and adds artisan
+  caching, verified per-repo (returns-api first as the Laravel pilot).
+- **webstore Node/S3 extraction** → the asset-publish must keep publishing identical
+  CDN paths after being split into its own job; verify CDN assets land unchanged before
+  removing the old inline steps. Highest-risk single migration → scheduled last.
 - **Shared `php-build-push.yaml` edit blast radius** → grep consumers first; changes are
   additive (new optional inputs) + conservative version bumps.
 
 ## Out of scope
 
-- Node/frontend repos (webstore, checkout, manage).
+See the exclusions table under **Scope** (batch, rp-cli-zero, checkout, manage). Also:
+
 - The deploy engine (`helm-deploy-eks.yaml`) and the standalone deploy workflows.
+- webstore's Node build itself — only its PHP image builds are unified; the Node/S3
+  asset publish is relocated, not redesigned.
 - Staging-deploy decoupling (DEVEX-1087) — related but separate.
