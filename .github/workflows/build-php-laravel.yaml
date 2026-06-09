@@ -22,6 +22,10 @@ on:
         required: false
         type: string
         default: "./build/Dockerfile-nginx"
+      webserver_tag_prefix:
+        required: false
+        type: string
+        default: "webserver-"
       dockerfile_cli_path:
         required: false
         type: string
@@ -71,6 +75,7 @@ jobs:
       build_cli_image: ${{ inputs.build_cli_image }}
       dockerfile_app_path: ${{ inputs.dockerfile_app_path }}
       dockerfile_webserver_path: ${{ inputs.dockerfile_webserver_path }}
+      webserver_tag_prefix: ${{ inputs.webserver_tag_prefix }}
       dockerfile_cli_path: ${{ inputs.dockerfile_cli_path }}
       new_tag: ${{ needs.calculate-tag.outputs.tag }}
     secrets:
