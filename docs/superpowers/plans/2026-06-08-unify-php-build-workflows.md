@@ -245,7 +245,7 @@ jobs:
     strategy:
       matrix:
         image: ${{ fromJSON(inputs.images) }}
-    uses: encodium/.github/.github/workflows/php-build-push.yaml@main
+    uses: ./.github/workflows/php-build-push.yaml   # local path: nested call resolves at the orchestrator's own ref
     with:
       php_version: ${{ inputs.php_version }}
       image_name: ${{ matrix.image.image_name }}
@@ -361,7 +361,7 @@ jobs:
 
   build:
     needs: [calculate-tag]
-    uses: encodium/.github/.github/workflows/php-laravel-build-push.yaml@main
+    uses: ./.github/workflows/php-laravel-build-push.yaml   # local path: nested call resolves at the orchestrator's own ref
     with:
       php_version: ${{ inputs.php_version }}
       php_extensions: ${{ inputs.php_extensions }}
