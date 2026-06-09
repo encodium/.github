@@ -107,12 +107,21 @@ jobs:
           IMAGE_NAME_INPUT: ${{ inputs.image_name }}
           TAG: ${{ inputs.tag }}
           EXTRA: ${{ inputs.extra_tag }}
+          CACHE_TYPE: ${{ inputs.cache_type }}
         run: |
           name="$IMAGE_NAME_INPUT"; [ -z "$name" ] && name="${{ github.repository }}"
           ref="ghcr.io/${name}"
           tags="${ref}:${TAG}"
           [ -n "$EXTRA" ] && tags="${tags},${ref}:${EXTRA}"
           echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          if [ "$CACHE_TYPE" = "gha" ]; then
+            scope="${name//\//-}"
+            echo "cache_from=type=gha,scope=${scope}" >> "$GITHUB_OUTPUT"
+            echo "cache_to=type=gha,scope=${scope},mode=max" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache_from=type=registry,ref=${ref}:buildcache" >> "$GITHUB_OUTPUT"
+            echo "cache_to=type=registry,ref=${ref}:buildcache,mode=max" >> "$GITHUB_OUTPUT"
+          fi
       - name: Docker Build and Push
         uses: docker/build-push-action@v6
         with:
@@ -122,5 +131,5 @@ jobs:
           platforms: linux/amd64
           target: ${{ inputs.build_target }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: ${{ inputs.cache_type == 'gha' && 'type=gha' || format('type=registry,ref=ghcr.io/{0}:buildcache', github.repository) }}
-          cache-to: ${{ inputs.cache_type == 'gha' && 'type=gha,mode=max' || format('type=registry,ref=ghcr.io/{0}:buildcache,mode=max', github.repository) }}
+          cache-from: ${{ steps.meta.outputs.cache_from }}
+          cache-to: ${{ steps.meta.outputs.cache_to }}
