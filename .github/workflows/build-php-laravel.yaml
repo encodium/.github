@@ -1,0 +1,102 @@
+name: Build PHP (Laravel)
+on:
+  workflow_call:
+    inputs:
+      php_version:
+        required: false
+        type: string
+        default: "8.3"
+      php_extensions:
+        required: false
+        type: string
+        default: "bcmath intl gd"
+      build_cli_image:
+        required: false
+        type: boolean
+        default: false
+      dockerfile_app_path:
+        required: false
+        type: string
+        default: "./build/Dockerfile-app"
+      dockerfile_webserver_path:
+        required: false
+        type: string
+        default: "./build/Dockerfile-nginx"
+      dockerfile_cli_path:
+        required: false
+        type: string
+        default: "./build/Dockerfile-cli"
+      release_branches:
+        required: false
+        type: string
+        default: "stage,hotfix,rc"
+    secrets:
+      packagist_username:
+        required: true
+      packagist_password:
+        required: true
+      gh_token:
+        required: true
+    outputs:
+      tag:
+        description: "The released tag"
+        value: ${{ jobs.tag-and-release.outputs.tag }}
+
+jobs:
+  calculate-tag:
+    name: Calculate Build Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.dry_tag_version.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: dry_tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.gh_token }}
+          release_branches: ${{ inputs.release_branches }}
+          fetch_all_tags: true
+          dry_run: true
+
+  build:
+    needs: [calculate-tag]
+    uses: ./.github/workflows/php-laravel-build-push.yaml
+    with:
+      php_version: ${{ inputs.php_version }}
+      php_extensions: ${{ inputs.php_extensions }}
+      build_app_image: true
+      build_webserver_image: true
+      build_cli_image: ${{ inputs.build_cli_image }}
+      dockerfile_app_path: ${{ inputs.dockerfile_app_path }}
+      dockerfile_webserver_path: ${{ inputs.dockerfile_webserver_path }}
+      dockerfile_cli_path: ${{ inputs.dockerfile_cli_path }}
+      new_tag: ${{ needs.calculate-tag.outputs.tag }}
+    secrets:
+      packagist_username: ${{ secrets.packagist_username }}
+      packagist_password: ${{ secrets.packagist_password }}
+      gh_token: ${{ secrets.gh_token }}
+
+  tag-and-release:
+    name: Github Tag and Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag_version.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.gh_token }}
+          release_branches: ${{ inputs.release_branches }}
+          fetch_all_tags: true
+      - uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Prerelease ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+          prerelease: true
