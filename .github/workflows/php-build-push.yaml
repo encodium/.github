@@ -25,6 +25,21 @@ on:
         required: false
         type: string
         default: "app"
+      image_name:
+        description: "Image repo path override for separate images, e.g. <repo>-profiler. Empty = github.repository."
+        required: false
+        type: string
+        default: ""
+      extra_tag:
+        description: "Optional companion tag to also push (e.g. latest, nginx-latest)."
+        required: false
+        type: string
+        default: ""
+      cache_type:
+        description: "Buildx cache backend: gha or registry."
+        required: false
+        type: string
+        default: "registry"
     secrets:
       packagist_username:
         required: true
@@ -79,26 +94,33 @@ jobs:
             }
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.gh_token }}
-
-      - name: Docker Build and Push App
-        uses: docker/build-push-action@v2
+      - name: Resolve image name and tags
+        id: meta
         env:
-          REGISTRY: ghcr.io
-          IMAGE_NAME: ${{ github.repository }}
+          IMAGE_NAME_INPUT: ${{ inputs.image_name }}
+          TAG: ${{ inputs.tag }}
+          EXTRA: ${{ inputs.extra_tag }}
+        run: |
+          name="$IMAGE_NAME_INPUT"; [ -z "$name" ] && name="${{ github.repository }}"
+          ref="ghcr.io/${name}"
+          tags="${ref}:${TAG}"
+          [ -n "$EXTRA" ] && tags="${tags},${ref}:${EXTRA}"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+      - name: Docker Build and Push
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ inputs.dockerfile }}
           push: true
           platforms: linux/amd64
           target: ${{ inputs.build_target }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: ${{ inputs.cache_type == 'gha' && 'type=gha' || format('type=registry,ref=ghcr.io/{0}:buildcache', github.repository) }}
+          cache-to: ${{ inputs.cache_type == 'gha' && 'type=gha,mode=max' || format('type=registry,ref=ghcr.io/{0}:buildcache,mode=max', github.repository) }}
