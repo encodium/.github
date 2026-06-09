@@ -162,20 +162,21 @@ Its `dockerfile_app_path`/`dockerfile_webserver_path` defaults
 (`./build/Dockerfile-app`, `./build/Dockerfile-nginx`) already match returns-api and
 vin_decoder_service.
 
-Two consumer-affecting changes apply when **returns-api** and **vin_decoder_service**
-move onto it (both currently tag proxy `nginx-` and run no artisan cache), to be
-validated on each repo's first build:
+**Proxy tag prefix — DECIDED: parametrize, keep each repo's current prefix.** The
+Laravel helper previously hardcoded `webserver-<tag>`, but returns-api and
+vin_decoder_service publish `nginx-<tag>` and consume that prefix in **two** places each
+(`deployments/templates/deployment.yaml` image line + `Start Release Train.yaml`
+`image_tag_prefixes`). To avoid that blast radius, `php-laravel-build-push.yaml` now
+takes an optional `webserver_tag_prefix` input (default `"webserver-"`, so its many
+existing callers — nexus, shopping, shipping, accounts-api, … — are byte-for-byte
+unaffected); `build-php-laravel.yaml` threads it through. returns-api and
+vin_decoder_service pass `webserver_tag_prefix: "nginx-"` and thus keep their exact
+current tags — **no deployment.yaml or SRT change needed**.
 
-1. **Proxy tag prefix changes `nginx-` → `webserver-`.** The Laravel helper hardcodes
-   `webserver-<tag>`; returns-api currently publishes `nginx-<tag>`. accounts-api
-   already uses `webserver-`. **Decision (recommended): align returns-api to
-   `webserver-`** and update its deploy/helm values to consume it, standardizing the
-   cohort. (Alternative: add a `webserver_tag_prefix` input to the helper to preserve
-   `nginx-` — only if the deploy-side change is undesirable.)
-2. **Artisan caching is newly introduced.** returns-api's current inline build does
-   not run `artisan *:cache`. The helper does. Laravel `config:cache` can fail if
-   build-time env is missing; accounts-api proves it is solvable. Verify the
-   returns-api image boots correctly after the pilot build.
+**Artisan caching is newly introduced** for returns-api/vin_decoder_service. Their
+current inline builds do not run `artisan *:cache`; the helper does. Laravel
+`config:cache` can fail if build-time env is missing; accounts-api proves it is
+solvable. Verify the image boots correctly after each repo's first build.
 
 ### Deploy stays in the thin caller (hard constraint)
 
@@ -216,14 +217,14 @@ deploy job. Caller-specific jobs stay in the caller:
 3. **Pilot v1** on **license_api** (simplest: app + nginx, no profiler). Verify a
    `push` build produces identical tags and the integration deploy runs; verify a
    `workflow_dispatch` build skips deploy.
-4. **Pilot Laravel** on **returns-api** (also validates the `webserver-` prefix change
-   and new artisan caching). Verify image boots.
+4. **Pilot Laravel** on **returns-api** (passes `webserver_tag_prefix: nginx-` to keep
+   its tags; validates new artisan caching). Verify image boots.
 5. Fan out v1: rp_api, internal_api, catalog_api (incl. profiler validation on
    rp_api/internal_api), radmin (staging deploy), then **webstore last** (Node/S3
    asset-publish extraction + apache image).
-6. Fan out Laravel: vin_decoder_service (same `nginx-`→`webserver-` + artisan changes
-   as the returns-api pilot, staging deploy), accounts-api (mostly a thin-caller
-   refactor since it already calls the helper).
+6. Fan out Laravel: vin_decoder_service (also passes `webserver_tag_prefix: nginx-`;
+   same artisan change as the returns-api pilot, staging deploy), accounts-api (keeps
+   default `webserver-`; mostly a thin-caller refactor since it already calls the helper).
 
 Each repo is its own PR; the shared-workflow PR(s) to `encodium/.github` merge first
 and are referenced `@main`.
@@ -235,9 +236,10 @@ and are referenced `@main`.
   current before fan-out.
 - **Matrix + reusable `uses:` + `secrets: inherit`** → supported by Actions; validated
   on the v1 pilot before fan-out.
-- **Laravel proxy-prefix / artisan changes** → affects returns-api and
-  vin_decoder_service; recommended path standardizes on `webserver-` and adds artisan
-  caching, verified per-repo (returns-api first as the Laravel pilot).
+- **Laravel artisan caching** → newly introduced for returns-api and vin_decoder_service;
+  verified per-repo via an image boot-check (returns-api first as the Laravel pilot). The
+  proxy prefix is preserved per-repo via the `webserver_tag_prefix` input (default
+  `webserver-`), so no deploy/SRT consumer changes and no risk to existing helper callers.
 - **webstore Node/S3 extraction** → the asset-publish must keep publishing identical
   CDN paths after being split into its own job; verify CDN assets land unchanged before
   removing the old inline steps. Highest-risk single migration → scheduled last.

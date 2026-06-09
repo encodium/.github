@@ -400,9 +400,10 @@ jobs:
           prerelease: true
 ```
 
-> The Laravel helper publishes the webserver image as `webserver-<tag>`. returns-api and
-> vin_decoder_service currently publish `nginx-<tag>`; their deploy/helm values are updated
-> to consume `webserver-` in Tasks 6 and 11 (per spec decision to standardize).
+> The Laravel helper's webserver tag prefix is configurable via `webserver_tag_prefix`
+> (default `webserver-`). build-php-laravel.yaml exposes the same input and threads it
+> through. returns-api and vin_decoder_service pass `webserver_tag_prefix: nginx-` to keep
+> their exact current proxy tags — so NO deployment.yaml or SRT changes (Tasks 6, 13).
 
 - [ ] **Step 2: Lint.** `actionlint .github/workflows/build-php-laravel.yaml` → no errors.
 
@@ -490,17 +491,13 @@ git commit -am "DEVEX-1630: migrate Build.yaml to shared build-php-v1 orchestrat
 
 ### Task 6: Pilot Laravel — returns-api
 
-**Files:** Modify `returns-api/.github/workflows/Build.yaml`; update returns-api deploy/helm
-values for the `nginx-` → `webserver-` proxy tag.
+**Files:** Modify `returns-api/.github/workflows/Build.yaml` only. The proxy prefix is kept
+as `nginx-` via the `webserver_tag_prefix` input, so **no deployment.yaml or SRT changes**.
 
-- [ ] **Step 1: Find the proxy image reference in deploy/helm values.**
-
-```bash
-grep -rn "nginx-" returns-api/deployments/ returns-api/.github/workflows/ || true
-```
-Note every place the proxy tag prefix is consumed.
-
-- [ ] **Step 2: Replace Build.yaml with the thin caller.**
+- [ ] **Step 1: Replace Build.yaml with the thin caller.** Pass `webserver_tag_prefix: nginx-`
+  so the proxy image keeps publishing `nginx-<tag>`/`nginx-latest` (matching
+  `deployments/templates/deployment.yaml` and `Start Release Train.yaml`'s
+  `image_tag_prefixes`).
 
 ```yaml
 name: Build
@@ -518,6 +515,7 @@ jobs:
     with:
       dockerfile_app_path: ./build/Dockerfile-app
       dockerfile_webserver_path: ./build/Dockerfile-nginx
+      webserver_tag_prefix: nginx-
     secrets:
       packagist_username: ${{ secrets.PACKAGIST_USERNAME }}
       packagist_password: ${{ secrets.PACKAGIST_PASSWORD }}
@@ -532,22 +530,21 @@ jobs:
     secrets: inherit
 ```
 
-- [ ] **Step 3: Update proxy tag consumers** found in Step 1 from `nginx-` to `webserver-`.
+- [ ] **Step 2: Lint.** `actionlint .github/workflows/Build.yaml` → no errors.
 
-- [ ] **Step 4: Lint.** `actionlint .github/workflows/Build.yaml` → no errors.
-
-- [ ] **Step 5: Trigger build, verify jobs + tags.** Same commands as Task 5 Steps 3-4, but
-  expect proxy tag `webserver-<tag>` (not `nginx-`), and confirm the **artisan cache steps
-  ran** in the build helper logs without error:
+- [ ] **Step 3: Trigger build, verify jobs + tags.** Same commands as Task 5 Steps 3-4;
+  expect app `:<tag>`/`:latest` and proxy `nginx-<tag>`/`nginx-latest` (UNCHANGED from
+  baseline), and confirm the **artisan cache steps ran** in the build helper logs without
+  error:
 
 ```bash
 gh run view <run-id> --repo encodium/returns-api --log | grep -i "artisan"
 ```
 
-- [ ] **Step 6: Boot-check the app image** (artisan caching is new for returns-api) — pull
+- [ ] **Step 4: Boot-check the app image** (artisan caching is new for returns-api) — pull
   the new app image in the dev sandbox and confirm it starts and serves a health route.
 
-- [ ] **Step 7: Commit on a branch, open draft PR.**
+- [ ] **Step 5: Commit on a branch, open draft PR.**
 
 ```bash
 git commit -am "DEVEX-1630: migrate Build.yaml to shared build-php-laravel orchestrator"
@@ -748,11 +745,10 @@ jobs:
 
 ### Task 13: vin_decoder_service (Laravel, **staging**)
 
-**Files:** Modify `vin_decoder_service/.github/workflows/Build.yaml`; update its deploy/helm
-values for `nginx-` → `webserver-`.
-- [ ] **Step 1:** Grep proxy-tag consumers: `grep -rn "nginx-" vin_decoder_service/deployments/ || true`.
-- [ ] **Step 2:** Replace the file with the thin caller; preserve the staging deploy verbatim
-  except `needs: [build]`:
+**Files:** Modify `vin_decoder_service/.github/workflows/Build.yaml` only. Proxy prefix kept
+as `nginx-` via `webserver_tag_prefix` — **no deployment/SRT changes**.
+- [ ] **Step 1:** Replace the file with the thin caller; pass `webserver_tag_prefix: nginx-`;
+  preserve the staging deploy verbatim except `needs: [build]`:
 
 ```yaml
 name: Build
@@ -769,6 +765,7 @@ jobs:
     with:
       dockerfile_app_path: ./build/Dockerfile-app
       dockerfile_webserver_path: ./build/Dockerfile-nginx
+      webserver_tag_prefix: nginx-
     secrets:
       packagist_username: ${{ secrets.PACKAGIST_USERNAME }}
       packagist_password: ${{ secrets.PACKAGIST_PASSWORD }}
@@ -791,10 +788,9 @@ jobs:
 
 > vin_decoder_service is `workflow_dispatch`-only today (no `push:` trigger) — preserved as-is.
 
-- [ ] **Step 3:** Update proxy consumers `nginx-` → `webserver-`.
-- [ ] **Step 4:** Lint, trigger, tag-diff (expect `webserver-<tag>`); boot-check image
-  (new artisan caching).
-- [ ] **Step 5:** Commit on branch, draft PR.
+- [ ] **Step 2:** Lint, trigger, tag-diff (expect proxy `nginx-<tag>` UNCHANGED); boot-check
+  image (new artisan caching).
+- [ ] **Step 3:** Commit on branch, draft PR.
 
 ### Task 14: webstore (v1, integration, **profiler + apache + Node/S3 extraction**) — LAST
 
@@ -835,7 +831,7 @@ jobs:
 - [ ] All 9 repos build via the shared orchestrators (`@main`); no repo retains inline
   composer/docker build steps for its PHP images.
 - [ ] Every repo's produced image tags match its pre-migration baseline (profiler images,
-  `nginx-`/`apache-` tags, `webserver-` for the two standardized Laravel repos).
+  `nginx-`/`apache-` tags; returns-api/vin keep `nginx-` via `webserver_tag_prefix`, accounts-api keeps `webserver-`).
 - [ ] Integration repos skip deploy on `workflow_dispatch`, deploy on `push` (Phase 0 gate
   preserved in the thin callers).
 - [ ] webstore CDN assets verified byte-path identical after Node/S3 extraction.
