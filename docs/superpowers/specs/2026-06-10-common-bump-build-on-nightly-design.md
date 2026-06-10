@@ -19,9 +19,15 @@ being a push — deploys). The bump push is already made with `REPO_WRITE_PAT` (
 
 ## Goal
 
-Every **nightly** common bump that actually changes common produces a new build/tag (and, for
-integration repos, an integration deploy) — the ticket's "ideal scenario." Without disturbing
-the many other `php-common-bump` consumers.
+**Anything that depends on common should receive a new tag and be deployed to integration when
+common changes.** Concretely: every **nightly** common bump that actually changes common produces
+a new build/tag (and, for repos with an integration pipeline, an integration deploy) — the
+ticket's "ideal scenario" — without disturbing the many other `php-common-bump` consumers.
+
+This change covers every common-dependent repo that **has a nightly common-update workflow**
+(the 11 below). Common-dependents that lack a nightly workflow (daemons, batch, radmin,
+vin_decoder_service) cannot be opted in until one exists; bringing them to full coverage by
+adding nightly workflows is a tracked follow-on (see Out of scope).
 
 ## Decisions (agreed)
 
@@ -121,7 +127,9 @@ no-op (the commit simply omits `[skip actions]`).
 ## Out of scope
 
 - Repos without a nightly common-update workflow (daemons, batch, radmin, vin_decoder_service):
-  no nightly bump exists to opt in. Adding nightly workflows to them is a separate effort.
+  no nightly bump exists to opt in. To fully satisfy "anything that depends on common" they would
+  each need a nightly common-update workflow (and, for integration deploy, a push→integration
+  build pipeline) added — a tracked follow-on, not part of this change.
 - The merge-path (`upgrade-common.yaml`) build-on-bump — deliberately excluded (nightly only).
 - The disabled `Nightly Integration Deploy.yaml` placeholder (deploy-latest-tag) — a separate,
   complementary idea, not needed for this ticket.
