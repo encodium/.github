@@ -105,22 +105,35 @@ jobs:
         id: meta
         env:
           IMAGE_NAME_INPUT: ${{ inputs.image_name }}
+          OWNER: ${{ github.repository_owner }}
+          DEFAULT_NAME: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
           EXTRA: ${{ inputs.extra_tag }}
           CACHE_TYPE: ${{ inputs.cache_type }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_TARGET: ${{ inputs.build_target }}
         run: |
-          name="$IMAGE_NAME_INPUT"; [ -z "$name" ] && name="${{ github.repository }}"
+          name="$IMAGE_NAME_INPUT"
+          if [ -z "$name" ]; then
+            name="$DEFAULT_NAME"
+          elif [ "${name#*/}" = "$name" ]; then
+            # bare name (no slash) → scope it under the repo owner, e.g. rp_api-profiler → encodium/rp_api-profiler
+            name="${OWNER}/${name}"
+          fi
           ref="ghcr.io/${name}"
           tags="${ref}:${TAG}"
           [ -n "$EXTRA" ] && tags="${tags},${ref}:${EXTRA}"
           echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          # Cache key = image + dockerfile + target, so matrix legs that share an image repo
+          # (e.g. app/nginx/apache all under <owner>/<repo>) don't collide on one cache.
+          disc="$(printf '%s-%s' "$DOCKERFILE" "$BUILD_TARGET" | tr -cs 'A-Za-z0-9' '-' | sed 's/^-*//;s/-*$//')"
           if [ "$CACHE_TYPE" = "gha" ]; then
-            scope="${name//\//-}"
+            scope="${name//\//-}-${disc}"
             echo "cache_from=type=gha,scope=${scope}" >> "$GITHUB_OUTPUT"
             echo "cache_to=type=gha,scope=${scope},mode=max" >> "$GITHUB_OUTPUT"
           else
-            echo "cache_from=type=registry,ref=${ref}:buildcache" >> "$GITHUB_OUTPUT"
-            echo "cache_to=type=registry,ref=${ref}:buildcache,mode=max" >> "$GITHUB_OUTPUT"
+            echo "cache_from=type=registry,ref=${ref}:buildcache-${disc}" >> "$GITHUB_OUTPUT"
+            echo "cache_to=type=registry,ref=${ref}:buildcache-${disc},mode=max" >> "$GITHUB_OUTPUT"
           fi
       - name: Docker Build and Push
         uses: docker/build-push-action@v6
