@@ -91,7 +91,9 @@ jobs:
           fi
 
           SUFFIX=""
-          [ "$SKIP_CI" = "true" ] && SUFFIX=" [skip actions]"
+          if [ "$SKIP_CI" = "true" ]; then
+            SUFFIX=" [skip actions]"
+          fi
           git commit -am "${COMMIT_MESSAGE}${SUFFIX}"
 
           # Push with retry logic to handle race conditions where main has moved
