@@ -42,6 +42,11 @@ on:
         required: false
         type: string
         default: "./build/Dockerfile-nginx"
+      webserver_tag_prefix:
+        description: "Tag prefix for the webserver image (e.g. webserver- or nginx-)."
+        required: false
+        type: string
+        default: "webserver-"
       new_tag:
         type: string
         required: true
@@ -145,7 +150,7 @@ jobs:
           push: true
           file: ${{ inputs.dockerfile_webserver_path }}
           platforms: linux/amd64
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:webserver-latest
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.webserver_tag_prefix }}${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.webserver_tag_prefix }}latest
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-webserver
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-webserver,mode=max
   build-and-push-cli-image:

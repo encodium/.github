@@ -21,10 +21,25 @@ on:
         required: true
         type: string
       build_target:
-        description: "The build target to use for the image build."
+        description: "Docker build stage to target. A stage name (e.g. app, app-profiler), or an empty string to build the Dockerfile's final stage (used for single-stage proxy images like nginx/apache). Callers set this per image."
         required: false
         type: string
         default: "app"
+      image_name:
+        description: "Image repo path. A bare name (no slash) is scoped under the org owner (e.g. rp_api-profiler -> encodium/rp_api-profiler); a full owner/name is used as-is; empty defaults to github.repository."
+        required: false
+        type: string
+        default: ""
+      extra_tag:
+        description: "Optional companion tag to also push (e.g. latest, nginx-latest)."
+        required: false
+        type: string
+        default: ""
+      cache_type:
+        description: "Buildx cache backend: gha or registry."
+        required: false
+        type: string
+        default: "registry"
     secrets:
       packagist_username:
         required: true
@@ -79,26 +94,55 @@ jobs:
             }
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.gh_token }}
-
-      - name: Docker Build and Push App
-        uses: docker/build-push-action@v2
+      - name: Resolve image name and tags
+        id: meta
         env:
-          REGISTRY: ghcr.io
-          IMAGE_NAME: ${{ github.repository }}
+          IMAGE_NAME_INPUT: ${{ inputs.image_name }}
+          OWNER: ${{ github.repository_owner }}
+          DEFAULT_NAME: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          EXTRA: ${{ inputs.extra_tag }}
+          CACHE_TYPE: ${{ inputs.cache_type }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_TARGET: ${{ inputs.build_target }}
+        run: |
+          name="$IMAGE_NAME_INPUT"
+          if [ -z "$name" ]; then
+            name="$DEFAULT_NAME"
+          elif [ "${name#*/}" = "$name" ]; then
+            # bare name (no slash) → scope it under the repo owner, e.g. rp_api-profiler → encodium/rp_api-profiler
+            name="${OWNER}/${name}"
+          fi
+          ref="ghcr.io/${name}"
+          tags="${ref}:${TAG}"
+          [ -n "$EXTRA" ] && tags="${tags},${ref}:${EXTRA}"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          # Cache key = image + dockerfile + target, so matrix legs that share an image repo
+          # (e.g. app/nginx/apache all under <owner>/<repo>) don't collide on one cache.
+          disc="$(printf '%s-%s' "$DOCKERFILE" "$BUILD_TARGET" | tr -cs 'A-Za-z0-9' '-' | sed 's/^-*//;s/-*$//')"
+          if [ "$CACHE_TYPE" = "gha" ]; then
+            scope="${name//\//-}-${disc}"
+            echo "cache_from=type=gha,scope=${scope}" >> "$GITHUB_OUTPUT"
+            echo "cache_to=type=gha,scope=${scope},mode=max" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache_from=type=registry,ref=${ref}:buildcache-${disc}" >> "$GITHUB_OUTPUT"
+            echo "cache_to=type=registry,ref=${ref}:buildcache-${disc},mode=max" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Docker Build and Push
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ inputs.dockerfile }}
           push: true
           platforms: linux/amd64
           target: ${{ inputs.build_target }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: ${{ steps.meta.outputs.cache_from }}
+          cache-to: ${{ steps.meta.outputs.cache_to }}
