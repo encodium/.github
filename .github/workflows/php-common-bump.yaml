@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_ci:
+        description: "Append [skip actions] to the bump commit so it does NOT trigger workflows."
+        required: false
+        type: boolean
+        default: true
     secrets:
       write_pat:
         required: true
@@ -71,6 +76,9 @@ jobs:
           command: composer update revolutionparts/common --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
       - name: Commit Common Bump
         id: commit
+        env:
+          SKIP_CI: ${{ inputs.skip_ci }}
+          COMMIT_MESSAGE: ${{ inputs.commit_message }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
@@ -82,7 +90,11 @@ jobs:
             exit 0
           fi
 
-          git commit -am "${{ inputs.commit_message }} [skip actions]"
+          SUFFIX=""
+          if [ "$SKIP_CI" = "true" ]; then
+            SUFFIX=" [skip actions]"
+          fi
+          git commit -am "${COMMIT_MESSAGE}${SUFFIX}"
 
           # Push with retry logic to handle race conditions where main has moved
           MAX_ATTEMPTS=5
