@@ -21,12 +21,12 @@ on:
         required: true
         type: string
       build_target:
-        description: "The build target to use for the image build."
+        description: "Docker build stage to target. A stage name (e.g. app, app-profiler), or an empty string to build the Dockerfile's final stage (used for single-stage proxy images like nginx/apache). Callers set this per image."
         required: false
         type: string
         default: "app"
       image_name:
-        description: "Image repo path override for separate images, e.g. <repo>-profiler. Empty = github.repository."
+        description: "Image repo path. A bare name (no slash) is scoped under the org owner (e.g. rp_api-profiler -> encodium/rp_api-profiler); a full owner/name is used as-is; empty defaults to github.repository."
         required: false
         type: string
         default: ""
