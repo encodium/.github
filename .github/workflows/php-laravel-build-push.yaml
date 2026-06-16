@@ -50,6 +50,11 @@ on:
       new_tag:
         type: string
         required: true
+      platforms:
+        description: "Comma-separated target platforms for docker buildx (e.g. linux/amd64,linux/arm64)."
+        required: false
+        type: string
+        default: "linux/amd64"
     secrets:
       packagist_username:
         required: true
@@ -121,7 +126,7 @@ jobs:
           push: true
           target: app
           file: ${{ inputs.dockerfile_app_path }}
-          platforms: linux/amd64
+          platforms: ${{ inputs.platforms }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
@@ -149,7 +154,7 @@ jobs:
           context: .
           push: true
           file: ${{ inputs.dockerfile_webserver_path }}
-          platforms: linux/amd64
+          platforms: ${{ inputs.platforms }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.webserver_tag_prefix }}${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.webserver_tag_prefix }}latest
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-webserver
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-webserver,mode=max
@@ -214,7 +219,7 @@ jobs:
           context: .
           push: true
           file: ${{ inputs.dockerfile_cli_path }}
-          platforms: linux/amd64
+          platforms: ${{ inputs.platforms }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cli-${{ inputs.new_tag }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cli-latest
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-cli
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-cli,mode=max
