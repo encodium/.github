@@ -1,0 +1,114 @@
+name: 'Compute and emit RT tag'
+description: |
+  Computes the next vX.Y.Z-rc.<N>.<iter> tag for the current rt-N branch,
+  pushes the lightweight tag, and creates a matching GitHub prerelease.
+
+  Designed for Release Train v2 (DEVEX-1579). The caller must:
+    - Be running on a branch matching 'rt-<N>'.
+    - Have run actions/checkout with fetch-depth: 0 and fetch-tags: true so
+      git merge-base and tag enumeration can see full history.
+    - Hold the Build.yaml concurrency group 'rt-build-${{ github.ref }}' to
+      prevent iter races (this action does NOT serialise on its own).
+
+  Base version is derived from the vX.Y.Z tag at the cut SHA
+  (merge-base between origin/main and HEAD). That tag exists because main
+  is configured to tag every push (radmin model). No state ledger is read.
+
+  NOTE on the tag format: the original spec proposed vX.Y.Z-rt.<N>.rc.<iter>
+  but composer's VersionParser rejects custom pre-release identifiers like
+  'rt'. Only the standard set (rc, beta, alpha, dev, patch) is accepted, so
+  the scheme uses 'rc.<N>.<iter>' where <N> is the train number. This
+  remains uniquely parseable (3-segment pre-release distinguishes new v2
+  tags from legacy v1 'vX.Y.Z-rc.<iter>' 2-segment tags) and sorts
+  correctly via standard semver comparison.
+
+inputs:
+  github_token:
+    description: 'Token with contents:write to push the tag and create the GH release'
+    required: true
+
+outputs:
+  tag:
+    description: 'The emitted tag (e.g., v4.7.0-rc.147.3)'
+    value: ${{ steps.compute.outputs.tag }}
+  train_number:
+    description: 'The train N parsed from the rt-N branch name'
+    value: ${{ steps.compute.outputs.train_number }}
+  iter:
+    description: 'The rc iteration number'
+    value: ${{ steps.compute.outputs.iter }}
+  base_version:
+    description: 'The vX.Y.Z base version (frozen at rt-N cut time)'
+    value: ${{ steps.compute.outputs.base_version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compute tag components
+      id: compute
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        branch="${GITHUB_REF_NAME}"
+        if [[ ! "$branch" =~ ^rt-[0-9]+$ ]]; then
+          echo "::error::Expected branch matching 'rt-<N>', got '$branch'."
+          echo "::error::This action is only valid on rt-* branches."
+          exit 1
+        fi
+        train_n="${branch#rt-}"
+
+        cut_sha=$(git merge-base origin/main HEAD)
+        if [ -z "$cut_sha" ]; then
+          echo "::error::Could not find merge-base between origin/main and HEAD."
+          echo "::error::Ensure checkout used fetch-depth: 0."
+          exit 1
+        fi
+
+        base=$(git tag --points-at "$cut_sha" \
+          | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+          | head -1 \
+          || true)
+        if [ -z "$base" ]; then
+          echo "::error::No vX.Y.Z tag at cut SHA $cut_sha."
+          echo "::error::Main must tag every push (mathieudutour) for this to work."
+          echo "::error::Verify the Phase 1 foundation work has landed on main."
+          exit 1
+        fi
+
+        iter_count=$(git tag -l "${base}-rc.${train_n}.*" | wc -l | tr -d ' ')
+        iter=$((iter_count + 1))
+        tag="${base}-rc.${train_n}.${iter}"
+
+        if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
+          echo "::error::Computed tag ${tag} already exists."
+          echo "::error::Likely an iter race — confirm Build.yaml has the concurrency group set."
+          exit 1
+        fi
+
+        {
+          echo "train_number=$train_n"
+          echo "base_version=$base"
+          echo "iter=$iter"
+          echo "tag=$tag"
+        } >> "$GITHUB_OUTPUT"
+
+        echo "Computed tag: $tag (base=$base, train=$train_n, iter=$iter, cut_sha=$cut_sha)"
+
+    - name: Push tag
+      shell: bash
+      run: |
+        set -euo pipefail
+        git tag "${{ steps.compute.outputs.tag }}"
+        git push origin "${{ steps.compute.outputs.tag }}"
+
+    - name: Create GitHub prerelease
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        set -euo pipefail
+        gh release create "${{ steps.compute.outputs.tag }}" \
+          --prerelease \
+          --title "${{ steps.compute.outputs.tag }}" \
+          --notes "Release Train ${{ steps.compute.outputs.train_number }}, rc.${{ steps.compute.outputs.iter }} (base ${{ steps.compute.outputs.base_version }})"
