@@ -1,0 +1,42 @@
+name: Notify CI Failure
+on:
+  workflow_call:
+    inputs:
+      workflow:
+        description: "Name of the workflow that failed"
+        required: true
+        type: string
+      run_url:
+        description: "URL of the failed run"
+        required: true
+        type: string
+      head_sha:
+        description: "Commit SHA the failed run was for"
+        required: true
+        type: string
+      branch:
+        required: false
+        type: string
+        default: ""
+      actor:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      slack_webhook_url:
+        required: true
+
+jobs:
+  notify:
+    name: Notify Slack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post failure to Slack
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.slack_webhook_url }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":rotating_light: *${{ github.repository }}* — *${{ inputs.workflow }}* failed on `${{ inputs.branch }}`\n*By:* ${{ inputs.actor }} · *Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ inputs.head_sha }}|${{ inputs.head_sha }}>\n<${{ inputs.run_url }}|View failed run>"
+            }
