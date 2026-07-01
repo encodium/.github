@@ -28,6 +28,38 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Parse rt tag (if applicable)
+        id: parse
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          # Surface train identifier + iter for RT-style tags so captains
+          # see "rc.3 of train 2026-06-18" in #releases, not just the full
+          # tag string. Two formats supported:
+          #   v2 (RT v2): vX.Y.Z-rc.<YYYY-MM-DD>.<iter>
+          #   v1 legacy:  vX.Y.Z-rc.<iter>
+          # Anything else (clean semver, custom suffix) gets a neutral
+          # summary so the notification still goes out.
+          if [[ "$IMAGE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.([0-9]{4}-[0-9]{2}-[0-9]{2})\.([0-9]+)$ ]]; then
+            TRAIN="${BASH_REMATCH[1]}"
+            ITER="${BASH_REMATCH[2]}"
+            echo "format=v2"                                       >> "$GITHUB_OUTPUT"
+            echo "train_date=$TRAIN"                               >> "$GITHUB_OUTPUT"
+            echo "iter=$ITER"                                      >> "$GITHUB_OUTPUT"
+            echo "summary=train $TRAIN · rc.$ITER"                 >> "$GITHUB_OUTPUT"
+          elif [[ "$IMAGE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.([0-9]+)$ ]]; then
+            ITER="${BASH_REMATCH[1]}"
+            echo "format=v1"                                       >> "$GITHUB_OUTPUT"
+            echo "iter=$ITER"                                      >> "$GITHUB_OUTPUT"
+            echo "summary=rc.$ITER (legacy v1)"                    >> "$GITHUB_OUTPUT"
+          elif [[ "$IMAGE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "format=plain"                                    >> "$GITHUB_OUTPUT"
+            echo "summary=clean release"                           >> "$GITHUB_OUTPUT"
+          else
+            echo "format=unknown"                                  >> "$GITHUB_OUTPUT"
+            echo "summary=${IMAGE_TAG}"                            >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Send deployment notification
         uses: slackapi/slack-github-action@v1.24.0
         env:
@@ -36,13 +68,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "${{ github.event.repository.name }} deployed",
+              "text": "${{ github.event.repository.name }} deployed — ${{ steps.parse.outputs.summary }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*\n\tView the <${{ inputs.dashboard_url }}|Deployment>\n\tView the <${{ inputs.apm_url }}|Service APM>"
+                    "text": "*${{ github.event.repository.name }} deployed* — _${{ steps.parse.outputs.summary }}_\nby ${{ github.triggering_actor }}\n\tView the <${{ inputs.dashboard_url }}|Deployment>\n\tView the <${{ inputs.apm_url }}|Service APM>"
                   },
                   "accessory": {
                     "type": "button",
