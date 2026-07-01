@@ -18,6 +18,16 @@ on:
         required: false
         type: string
         default: "gha"
+      rt_mode:
+        description: |
+          Release-train mode. When true, skips mathieudutour and the trailing
+          GH Release step; the encodium/actions _compute-rt-tag composite
+          pushes the rt rc tag and creates the GH pre-release atomically up
+          front, and `build` uses that tag. Caller must trigger on rt-* refs
+          and grant `contents: write` to this job (see DEVEX-1653).
+        required: false
+        type: boolean
+        default: false
     secrets:
       packagist_username:
         required: true
@@ -27,12 +37,17 @@ on:
         required: true
     outputs:
       tag:
-        description: "The released tag"
-        value: ${{ jobs.tag-and-release.outputs.tag }}
+        description: "The released tag (either the main vX.Y.Z tag or the rt rc tag)."
+        value: ${{ jobs.tag-and-release.outputs.tag || jobs.compute-rt-tag.outputs.tag }}
 
 jobs:
+  # ─── non-rt path ────────────────────────────────────────────────────────
+  # Dry-run mathieudutour to compute what tag-and-release will emit; build
+  # uses that pre-computed value so the image tag and the eventual git tag
+  # agree. Skipped under rt_mode (the composite handles tagging atomically).
   calculate-tag:
     name: Calculate Build Tag
+    if: ${{ !inputs.rt_mode }}
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.dry_tag_version.outputs.new_tag }}
@@ -48,9 +63,40 @@ jobs:
           fetch_all_tags: true
           dry_run: true
 
+  # ─── rt-mode path ───────────────────────────────────────────────────────
+  # Single source of truth for rt rc tagging: the composite parses the
+  # rt-<YYYY-MM-DD> branch, computes the next iter, pushes the lightweight
+  # tag, and creates the GH pre-release. Build then consumes its output.
+  compute-rt-tag:
+    name: Compute RT Tag
+    if: ${{ inputs.rt_mode }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.rt_tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - id: rt_tag
+        uses: encodium/actions/.github/actions/_compute-rt-tag@main
+        with:
+          github_token: ${{ secrets.gh_token }}
+
   build:
     name: Build ${{ matrix.image.tag_prefix }}image
-    needs: [calculate-tag]
+    # Either calculate-tag (non-rt) or compute-rt-tag (rt) will run; the
+    # other is skipped by its branch gate. `always()` keeps build alive
+    # despite the skipped need, and the explicit success check prevents a
+    # false start if the active tag job actually failed.
+    needs: [calculate-tag, compute-rt-tag]
+    if: |
+      always() && (
+        needs.calculate-tag.result == 'success' ||
+        needs.compute-rt-tag.result == 'success'
+      )
     strategy:
       matrix:
         image: ${{ fromJSON(inputs.images) }}
@@ -60,7 +106,9 @@ jobs:
       image_name: ${{ matrix.image.image_name }}
       dockerfile: ${{ matrix.image.dockerfile }}
       build_target: ${{ matrix.image.target }}
-      tag: ${{ matrix.image.tag_prefix }}${{ needs.calculate-tag.outputs.tag }}
+      # Skipped jobs return empty-string outputs, so `||` picks the active
+      # path's tag without further gating.
+      tag: ${{ matrix.image.tag_prefix }}${{ needs.calculate-tag.outputs.tag || needs.compute-rt-tag.outputs.tag }}
       extra_tag: ${{ matrix.image.extra_tag }}
       cache_type: ${{ inputs.cache_type }}
     secrets:
@@ -68,8 +116,21 @@ jobs:
       packagist_password: ${{ secrets.packagist_password }}
       gh_token: ${{ secrets.gh_token }}
 
+  # ─── non-rt path (tail) ────────────────────────────────────────────────
+  # Re-runs mathieudutour (this time not dry) to actually push the tag,
+  # then creates the GH pre-release. Skipped under rt_mode — the composite
+  # already did both up front.
+  #
+  # !cancelled() gate: `needs: [build]` transitively inherits `build`'s
+  # own needs ([calculate-tag, compute-rt-tag]), one of which is always
+  # skipped depending on rt_mode. GitHub Actions' default `success()`
+  # gate on job-if propagates that transitive skip and silently skips
+  # this job even when build itself succeeded — verified by the failing
+  # Batch 1 run against the shared orchestrator immediately post-#137
+  # (all main-builds emitted empty image_tag → helm apply crash).
   tag-and-release:
     name: Github Tag and Release
+    if: ${{ !cancelled() && !inputs.rt_mode }}
     needs: [build]
     runs-on: ubuntu-latest
     outputs:
