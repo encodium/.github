@@ -57,7 +57,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: dry_tag_version
-        uses: mathieudutour/github-tag-action@v6.1
+        uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.gh_token }}
           release_branches: ${{ inputs.release_branches }}
@@ -94,7 +94,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: tag_version
-        uses: mathieudutour/github-tag-action@v6.1
+        uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.gh_token }}
           release_branches: ${{ inputs.release_branches }}

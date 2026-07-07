@@ -30,9 +30,13 @@ jobs:
         with:
           ref: ${{ inputs.image_tag }}
       - name: Setup Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v4
+        with:
+          token: ${{ github.token }}
       - name: Setup Kubectl
-        uses: Azure/setup-kubectl@v3
+        uses: Azure/setup-kubectl@v4
+        with:
+          token: ${{ github.token }}
       - name: deploy
         run: |
           kubectl config set-cluster k8s --server="${{ secrets.k8s_server }}"

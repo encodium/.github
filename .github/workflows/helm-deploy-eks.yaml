@@ -55,7 +55,7 @@ jobs:
         with:
           ref: ${{ inputs.image_tag }}
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.aws_access_id }}
           aws-secret-access-key: ${{ secrets.aws_access_secret }}
@@ -63,9 +63,16 @@ jobs:
           role-duration-seconds: 1200
           role-session-name: GithubActions-${{ github.event.repository.name }}
       - name: Setup Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v4
+        with:
+          # token: fetches the latest Helm release from GitHub. Without it
+          # the action falls back to a hardcoded default version and emits
+          # a warning on every deploy log.
+          token: ${{ github.token }}
       - name: Setup Kubectl
-        uses: Azure/setup-kubectl@v3
+        uses: Azure/setup-kubectl@v4
+        with:
+          token: ${{ github.token }}
       - name: deploy
         run: |
           echo "${{ secrets.kubeconfig }}" >> kube.config
