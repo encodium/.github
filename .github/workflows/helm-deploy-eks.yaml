@@ -46,6 +46,23 @@ on:
       aws_access_secret:
         required: true
 
+# Serialise deploys per (repository, environment, release_name). Two
+# `helm upgrade` calls targeting the same release cannot run concurrently
+# — helm rejects the second with "another operation (install/upgrade/
+# rollback) is in progress" (surfaced 2026-07-08 after the fire-and-
+# forget dispatch refactor decoupled deploy timing from Build timing).
+#
+# cancel-in-progress: false so the current deploy runs to completion.
+# Canceling an in-flight helm upgrade mid-flight risks leaving the
+# release in a weird state; queueing the next dispatch is safer.
+#
+# The group name is scoped to (repo, env, release_name) so unrelated
+# deploys don't block each other — a stg deploy for internal_api can
+# proceed while a stg deploy for catalog_api runs.
+concurrency:
+  group: helm-deploy-${{ github.repository }}-${{ inputs.environment }}-${{ inputs.release_name || github.event.repository.name }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

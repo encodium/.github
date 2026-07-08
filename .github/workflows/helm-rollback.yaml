@@ -21,6 +21,15 @@ on:
       k8s_token:
         required: true
 
+# Serialise rollbacks per (repository, environment, deployment) so a
+# rollback can't race with a concurrent helm operation on the same
+# release — same "another operation in progress" class of failure as
+# on helm-deploy-eks.yaml. cancel-in-progress: false because canceling
+# a rollback mid-flight would be worse than queueing.
+concurrency:
+  group: helm-deploy-${{ github.repository }}-${{ inputs.environment }}-${{ inputs.deployment }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

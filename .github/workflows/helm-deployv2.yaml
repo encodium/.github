@@ -42,6 +42,17 @@ on:
       kubeconfig:
         required: true
 
+# Serialise deploys per (repository, environment, release_name). Two
+# `helm upgrade` calls targeting the same release cannot run concurrently
+# — helm rejects the second with "another operation (install/upgrade/
+# rollback) is in progress" (surfaced 2026-07-08 on helm-deploy-eks.yaml).
+# Same treatment applied here for consistency across shared helm
+# workflows. cancel-in-progress: false so the current deploy runs to
+# completion before the next dispatch takes over.
+concurrency:
+  group: helm-deploy-${{ github.repository }}-${{ inputs.environment }}-${{ inputs.release_name || github.event.repository.name }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
