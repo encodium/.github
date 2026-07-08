@@ -40,6 +40,16 @@ on:
 jobs:
   check-jira-ticket:
     name: Verify Jira Ticket Link
+    # Only run the check on pull_request events. When this workflow is
+    # invoked from a caller that also triggers on push:main (e.g., a
+    # "Pull Request Workflow" that runs on both `pull_request` and
+    # `push` to main to reuse lint/test jobs), the squash-merge commit
+    # message often doesn't carry the ticket ID — semantic-conventional
+    # commits like `refactor(ci): …` are common and legitimate. The
+    # PR-time check already validated the ticket before the merge
+    # landed; running it again on push is redundant and produces
+    # false-negative alerts.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
