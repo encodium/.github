@@ -28,6 +28,47 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      # Compute the previous production release tag by walking the GH
+      # Releases API and picking the most recent non-current, non-draft,
+      # non-prerelease entry. Callers gate this workflow on
+      # `inputs.environment == 'prod'`, so filtering out prereleases yields
+      # the previous prod release specifically. Enables a compare link in
+      # the Slack message so folks can see exactly what shipped.
+      - name: Compute previous prod release + diff link
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(gh release list \
+            --repo "${{ github.repository }}" \
+            --exclude-drafts \
+            --exclude-pre-releases \
+            --json tagName,publishedAt \
+            --limit 50 \
+            | jq -r --arg cur "$CURRENT_TAG" \
+              '[.[] | select(.tagName != $cur)] | sort_by(.publishedAt) | reverse | .[0].tagName // ""')
+          if [ -n "$PREV_TAG" ]; then
+            COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}"
+            # Slack mrkdwn: leading tab preserves the indented-bullet style
+            # used by the other lines in the payload.
+            DIFF_LINE="\n\t<${COMPARE_URL}|View changes since ${PREV_TAG}>"
+            echo "Previous prod release: $PREV_TAG"
+            echo "Compare URL: $COMPARE_URL"
+          else
+            # First prod release for this repo — nothing to diff against.
+            DIFF_LINE=""
+            echo "No previous prod release found — first-time prod deploy."
+          fi
+          {
+            echo "previous_tag=$PREV_TAG"
+            echo "diff_line<<EOF"
+            printf '%s' "$DIFF_LINE"
+            echo
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Send deployment notification
         uses: slackapi/slack-github-action@v1.24.0
         env:
@@ -42,7 +83,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*\n\tView the <${{ inputs.dashboard_url }}|Deployment>\n\tView the <${{ inputs.apm_url }}|Service APM>"
+                    "text": "*${{ github.event.repository.name }} deployed by ${{ github.triggering_actor }}*\n\tVersion: `${{ inputs.image_tag }}`\n\tView the <${{ inputs.dashboard_url }}|Deployment>\n\tView the <${{ inputs.apm_url }}|Service APM>${{ steps.diff.outputs.diff_line }}"
                   },
                   "accessory": {
                     "type": "button",
