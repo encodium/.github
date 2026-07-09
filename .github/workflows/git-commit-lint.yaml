@@ -10,6 +10,30 @@ on:
 jobs:
   commitlint:
     name: commit-lint
+    # Gate on pull_request events only. Callers typically invoke this
+    # from a pull-request-workflow.yaml that fires on both `pull_request`
+    # AND `push:main` (so PR CI and post-merge CI share config), but
+    # commit-lint on push:main is a false-negative machine:
+    #
+    #   * The PR's commits were already commit-linted at PR time — this
+    #     re-run adds no new signal.
+    #   * The squash-merge produces a NEW commit whose subject comes from
+    #     the PR title (per GitHub's default squash behavior). Per the
+    #     org PR-title convention (`<TICKET-ID>: <terse description>`,
+    #     see @revolutionparts/dotfiles CLAUDE.md), that subject starts
+    #     with a Jira ticket ID, not a conventional-commits type prefix
+    #     (`feat:`, `ci:`, `fix:` …). commitlint's config-conventional
+    #     rejects it, the check goes red on main, and the shared
+    #     ci-failure-notify chain (DEVEX-1398) posts a "check failed on
+    #     main" alert to #releases that looks like a build failure but
+    #     is actually cosmetic.
+    #
+    # Fix: skip on push. Same gate we applied to jira-ticket-check.yaml
+    # (DEVEX-1653 follow-up, .github#144). If we ever want to enforce
+    # commitlint on the squash-merge subject too, the right move is to
+    # change the PR-title convention org-wide — not to keep re-running
+    # the check where it always fires false-negatives.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
