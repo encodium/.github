@@ -20,6 +20,19 @@ on:
         required: false
         type: string
         default: "https://app.datadoghq.com/services?env=production"
+      on_rt:
+        # Accepted but not yet consumed by the classifier — the current
+        # step below still uses tag-shape inference. This input is
+        # declared now so the 21 DEVEX-1653 sweep PRs (which pass
+        # `on_rt: ${{ inputs.on_rt }}` from each participant's deploy
+        # chain) don't hit "invalid input" once they land. A follow-up
+        # PR flips the classifier to bright-line `on_rt=true → 🚂 RT,
+        # else → ⚡ Hotfix` and drops the tag-inference fallback, after
+        # rt-promote.sh is updated to pass `-f on_rt=true`.
+        description: "true only when the deploy is dispatched by rt-promote.sh (coordinated train promote). Default false = hotfix / out-of-band. Reserved for use once the DEVEX-1653 sweep completes."
+        type: boolean
+        default: false
+        required: false
     secrets:
       slack_webhook_url:
         required: true
