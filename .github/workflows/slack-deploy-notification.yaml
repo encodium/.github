@@ -21,15 +21,14 @@ on:
         type: string
         default: "https://app.datadoghq.com/services?env=production"
       on_rt:
-        # Accepted but not yet consumed by the classifier — the current
-        # step below still uses tag-shape inference. This input is
-        # declared now so the 21 DEVEX-1653 sweep PRs (which pass
-        # `on_rt: ${{ inputs.on_rt }}` from each participant's deploy
-        # chain) don't hit "invalid input" once they land. A follow-up
-        # PR flips the classifier to bright-line `on_rt=true → 🚂 RT,
-        # else → ⚡ Hotfix` and drops the tag-inference fallback, after
-        # rt-promote.sh is updated to pass `-f on_rt=true`.
-        description: "true only when the deploy is dispatched by rt-promote.sh (coordinated train promote). Default false = hotfix / out-of-band. Reserved for use once the DEVEX-1653 sweep completes."
+        # Consumed by the classify step below (bright-line rule since
+        # the DEVEX-1653 sweep completed 2026-07-09):
+        #   on_rt=true  → 🚂 RT     (only rt-promote.sh sets this)
+        #   on_rt=false → ⚡ Hotfix (default — every other dispatch path)
+        # This replaced tag-shape inference, which mis-badged rc.N>1
+        # hotfix backport promotes as 🚂 RT (Sam's 2026-07-09 rc.8 case).
+        # The dispatcher's intent is the source of truth, not the tag.
+        description: "true only when the deploy is dispatched by rt-promote.sh (coordinated train promote). Default false = hotfix / out-of-band."
         type: boolean
         default: false
         required: false
@@ -41,15 +40,23 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      # Classify the deploy as Release Train (rt) or Hotfix based on the
-      # image tag shape. RT deploys tag `vX.Y.Z-rc.YYYY-MM-DD.N` — the rc
-      # suffix with a train-date is the tell. Everything else (plain
-      # `vX.Y.Z` main deploys, feature-branch tags, ad-hoc) is treated
-      # as a hotfix / out-of-band deploy.
+      # Classify the deploy as Release Train (rt) or Hotfix from the
+      # dispatcher's declared intent (inputs.on_rt), not the tag shape.
       #
       # Rationale (Peace Room 2026-07-09): during P0 triage the team needs
       # to quickly spot which prod deploys skipped the RT sign-off flow,
       # since hotfixes see less scrutiny and are more likely culprits.
+      # The prior tag-inference version (v1 of this classifier) matched
+      # every -rc.YYYY-MM-DD.N tag as RT — that mis-badged rc.N>1 hotfix
+      # backport promotes (e.g. rt-promote.sh already shipped rc.1 on
+      # Thursday; hotfix backport lands as rc.2 and is manually promoted
+      # via `gh workflow run deploy-production.yaml`; that IS a hotfix
+      # semantically, even though the tag pattern matches). Only the
+      # dispatcher knows which is which. The 2026-07-09 DEVEX-1653 sweep
+      # threaded `on_rt` through every participant's deploy chain so
+      # rt-promote.sh can set it true and every other dispatch defaults
+      # false.
+      #
       # This runs unconditionally because the workflow is prod-only by
       # structural design — callers only invoke it from prod deploy
       # paths (deploy-eks.yaml → slack-notification), so every message
@@ -57,10 +64,10 @@ jobs:
       - name: Classify deploy type
         id: type
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          ON_RT: ${{ inputs.on_rt }}
         run: |
           set -euo pipefail
-          if [[ "$IMAGE_TAG" =~ -rc\.[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]+$ ]]; then
+          if [[ "$ON_RT" == "true" ]]; then
             BADGE_MRKDWN="🚂 *RT*"
             BADGE_TEXT="🚂 RT"
             CLASSIFICATION="release-train"
@@ -69,7 +76,7 @@ jobs:
             BADGE_TEXT="⚡ Hotfix"
             CLASSIFICATION="hotfix"
           fi
-          echo "Classified $IMAGE_TAG as $CLASSIFICATION"
+          echo "on_rt=$ON_RT → classified as $CLASSIFICATION"
           {
             echo "badge_mrkdwn=$BADGE_MRKDWN"
             echo "badge_text=$BADGE_TEXT"
