@@ -91,6 +91,17 @@ jobs:
         with:
           token: ${{ github.token }}
       - name: deploy
+        # Raise helm's client-side API rate limits. `helm upgrade --wait`
+        # polls the status of every object in the release on a loop; large
+        # releases (e.g. webstore: ~90+ pods + deployments/services/ingress)
+        # exceed helm's low default QPS and the client-go rate limiter errors
+        # with "client rate limiter Wait returned an error: rate: Wait(n=1)
+        # would exceed context deadline", failing an otherwise-healthy deploy
+        # (webstore prod, 2026-07-09, DEVEX-1687). The API server's own
+        # Priority & Fairness still protects it; this only relaxes the client.
+        env:
+          HELM_QPS: "50"
+          HELM_BURST_LIMIT: "300"
         run: |
           echo "${{ secrets.kubeconfig }}" >> kube.config
           export KUBECONFIG=./kube.config
