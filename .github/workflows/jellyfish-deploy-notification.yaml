@@ -1,0 +1,50 @@
+name: Jellyfish Deploy Notification (retired)
+# RETIRED 2026-07-10 (DEVEX-1653). The org no longer uses Jellyfish for
+# deploy tracking. The original workflow was deleted in
+# encodium/.github#152 (a3b0afca) after per-repo `jellyfish-notify` jobs
+# were scrubbed across all 22 RT participants.
+#
+# This file is a NO-OP stub. It exists only so that long-lived branches
+# (feature branches, hotfix-*, dependabot bumps, in-flight PRs) cut
+# BEFORE the delete don't fail `workflow_dispatch` startup validation.
+# GH walks the reusable-workflow tree even for jobs gated `if:` off, so
+# a stale reference here caused startup_failure on any dispatched run
+# whose branch still referenced the shared workflow.
+#
+# The stub matches the retired workflow's input/secret signature exactly
+# so callers resolve cleanly. The job body does nothing except log a
+# deprecation note. No Jellyfish API call, no side effects, no failure.
+#
+# Once every branch across the org has cycled through main (rebased or
+# merged and picked up the sweep from encodium/.github#152), this stub
+# can be deleted for real. Rough guideline: ~1 month of natural branch
+# churn should be enough for anything actively worked on.
+#
+# Related:
+# - The 22-participant sweep that removed `jellyfish-notify` jobs from
+#   every RT participant landed 2026-07-10.
+# - Surfaced by encodium/internal_api run 29114404344 on hotfix-SHOP-5216.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      image_tag:
+        type: string
+        required: true
+    secrets:
+      jellyfish_api_token:
+        required: true
+
+jobs:
+  notify-jellyfish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deprecated — stub only
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          echo "::notice title=Jellyfish integration retired::This shared workflow is a no-op stub. The org no longer uses Jellyfish for deploy tracking (DEVEX-1653, retired 2026-07-10). Called from ${{ github.repository }} for image_tag=$IMAGE_TAG to $ENVIRONMENT. Consider removing the jellyfish-notify job from this caller's workflow to get rid of this warning."
