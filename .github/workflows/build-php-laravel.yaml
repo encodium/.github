@@ -33,7 +33,7 @@ on:
       release_branches:
         required: false
         type: string
-        default: "stage,hotfix,rc"
+        default: "main"
     secrets:
       packagist_username:
         required: true
