@@ -140,3 +140,21 @@ jobs:
           prerelease: false
           allowUpdates: true
           omitBodyDuringUpdate: true
+          # DEVEX-1655 (2026-07-13): explicitly set makeLatest=legacy so
+          # GitHub re-evaluates the "latest release" designation on this
+          # PATCH. Per GH REST docs, if `make_latest` is not defined on
+          # an update, "the release will not be reevaluated" — the
+          # previous latest sticks. The ncipollo action documents
+          # `legacy` as its default but doesn't actually pass the field
+          # when the input is omitted, so we hit the "no reevaluation"
+          # case.
+          #
+          # `legacy` = "determine based on release creation date and
+          # higher semantic version," which is the semantic we want for
+          # RT v2: every promoted rc becomes latest if it's semver-higher
+          # than the previous latest. A rollback deploy of an older rc
+          # will correctly leave the newer rc as latest.
+          #
+          # Surfaced 2026-07-13 on encodium/batch — rc.9 stayed pinned as
+          # "latest" after rc.10/11/12 were successfully promoted.
+          makeLatest: legacy
