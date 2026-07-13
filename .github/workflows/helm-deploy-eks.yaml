@@ -140,21 +140,28 @@ jobs:
           prerelease: false
           allowUpdates: true
           omitBodyDuringUpdate: true
-          # DEVEX-1655 (2026-07-13): explicitly set makeLatest=legacy so
-          # GitHub re-evaluates the "latest release" designation on this
-          # PATCH. Per GH REST docs, if `make_latest` is not defined on
-          # an update, "the release will not be reevaluated" — the
-          # previous latest sticks. The ncipollo action documents
-          # `legacy` as its default but doesn't actually pass the field
-          # when the input is omitted, so we hit the "no reevaluation"
-          # case.
+          # DEVEX-1655 (2026-07-13): explicitly set makeLatest=true so
+          # GitHub re-designates this release as "latest" on the PATCH.
           #
-          # `legacy` = "determine based on release creation date and
-          # higher semantic version," which is the semantic we want for
-          # RT v2: every promoted rc becomes latest if it's semver-higher
-          # than the previous latest. A rollback deploy of an older rc
-          # will correctly leave the newer rc as latest.
+          # Why not `legacy` (semver-based auto-detect): tested against
+          # encodium/batch rc.9 vs rc.12 on 2026-07-13 — `legacy` did
+          # not re-designate. GH's semver comparator appears to treat
+          # `2026-07-09` in the prerelease identifier as an alphanumeric
+          # segment (because of the hyphens) and compares subsequent
+          # segments incorrectly, so `-rc.2026-07-09.12` does not
+          # cleanly rank above `-rc.2026-07-09.9` in its impl. `true`
+          # sidesteps that.
           #
-          # Surfaced 2026-07-13 on encodium/batch — rc.9 stayed pinned as
-          # "latest" after rc.10/11/12 were successfully promoted.
-          makeLatest: legacy
+          # Why not omitted (relying on ncipollo default): the action
+          # doesn't forward the default to the PATCH request, so GH's
+          # 'no reevaluation on undefined' behavior kicks in and the
+          # first-promoted rc stays pinned as latest indefinitely.
+          #
+          # Semantic under RT v2: "latest release" = whatever is
+          # currently running in prod. Rollback deploys of older rc's
+          # correctly move latest backwards to reflect what's actually
+          # deployed. Main-branch clean tags (`vX.Y.Z`) go through a
+          # different action (mathieudutour/ncipollo on create, not
+          # PATCH) so they're not affected by this change — they use
+          # normal semver ordering on release create.
+          makeLatest: true
