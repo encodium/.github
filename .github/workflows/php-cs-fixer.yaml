@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: "chore(php-cs-fixer): fix code style issues"
+      with_valkey_glide:
+        description: "Install valkey_glide PHP extension before composer install"
+        required: false
+        type: boolean
+        default: false
     secrets:
       packagist_username:
         required: true
@@ -35,14 +40,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: "${{ inputs.php_version }}"
           tools: composer:v2
+
+      - name: Install Valkey GLIDE extension
+        if: ${{ inputs.with_valkey_glide }}
+        uses: ./.github/actions/install-valkey-glide
 
       - name: Cache PHP CS Fixer
         uses: actions/cache@v5

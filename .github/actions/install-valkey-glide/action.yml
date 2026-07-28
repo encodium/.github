@@ -1,0 +1,51 @@
+name: Install Valkey GLIDE extension
+description: Install valkey_glide PHP extension from a GitHub release tarball
+
+inputs:
+  version:
+    description: Valkey GLIDE PHP release version
+    required: false
+    default: "1.1.2"
+
+runs:
+  using: composite
+  steps:
+    - name: Install valkey_glide build dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -y
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          build-essential \
+          git \
+          libffi-dev \
+          pkg-config \
+          python3 \
+          libprotobuf-c-dev \
+          libssl-dev \
+          protobuf-compiler \
+          protobuf-c-compiler
+
+    - name: Install Rust toolchain and cbindgen
+      shell: bash
+      run: |
+        if ! command -v cargo >/dev/null 2>&1; then
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        fi
+        . "$HOME/.cargo/env"
+        export PATH="$HOME/.cargo/bin:$PATH"
+        rustup default stable
+        if ! command -v cbindgen >/dev/null 2>&1; then
+          cargo install cbindgen
+        fi
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+    - name: Install valkey_glide
+      shell: bash
+      run: |
+        . "$HOME/.cargo/env"
+        export PATH="$HOME/.cargo/bin:$PATH"
+        curl -fsSL -o /tmp/valkey_glide.tgz \
+          "https://github.com/valkey-io/valkey-glide-php/releases/download/v${{ inputs.version }}/valkey_glide-${{ inputs.version }}.tgz"
+        sudo env HOME="$HOME" CARGO_HOME="$HOME/.cargo" PATH="$PATH" pecl install /tmp/valkey_glide.tgz
+        echo "extension=valkey_glide.so" | sudo tee "$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')/99-valkey_glide.ini"
+        rm -f /tmp/valkey_glide.tgz
