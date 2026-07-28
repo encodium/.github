@@ -59,7 +59,7 @@ jobs:
 
       - name: Install Valkey GLIDE extension
         if: ${{ inputs.with_valkey_glide }}
-        uses: encodium/.github/.github/actions/install-valkey-glide@PLAT-5055-valkey-glide-ci
+        uses: encodium/.github/.github/actions/install-valkey-glide@main
 
       - name: Install composer dependencies
         uses: ramsey/composer-install@v2
