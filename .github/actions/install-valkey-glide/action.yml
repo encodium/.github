@@ -46,6 +46,6 @@ runs:
         export PATH="$HOME/.cargo/bin:$PATH"
         curl -fsSL -o /tmp/valkey_glide.tgz \
           "https://github.com/valkey-io/valkey-glide-php/releases/download/v${{ inputs.version }}/valkey_glide-${{ inputs.version }}.tgz"
-        sudo env HOME="$HOME" CARGO_HOME="$HOME/.cargo" PATH="$PATH" pecl install /tmp/valkey_glide.tgz
+        yes '' | sudo env HOME="$HOME" CARGO_HOME="$HOME/.cargo" PATH="$PATH" pecl install /tmp/valkey_glide.tgz
         echo "extension=valkey_glide.so" | sudo tee "$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')/99-valkey_glide.ini"
         rm -f /tmp/valkey_glide.tgz
