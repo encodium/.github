@@ -1,0 +1,95 @@
+name: SonarQube Manual Scan
+
+on:
+  workflow_call:
+    inputs:
+      quality_profile:
+        description: SonarCloud quality profile name (e.g. Sonar way)
+        required: true
+        type: string
+      ref:
+        description: Branch, tag, or SHA to analyze (defaults to caller ref)
+        required: false
+        type: string
+        default: ""
+      fetch_depth:
+        description: Git fetch depth (0 = full history for Sonar SCM)
+        required: false
+        type: number
+        default: 0
+      runs_on:
+        required: false
+        type: string
+        default: ubuntu-latest-8-cores
+      sonar_scanner_opts:
+        required: false
+        type: string
+        default: -Xmx4000m
+      coverage_workflow_run_id:
+        description: Workflow run ID to download coverage artifacts from (optional)
+        required: false
+        type: string
+        default: ""
+      coverage_artifact_pattern:
+        description: Artifact name pattern when downloading coverage (e.g. coverage*)
+        required: false
+        type: string
+        default: coverage*
+      coverage_files_to_rewrite:
+        description: Comma-separated coverage.xml paths to rewrite for Sonar container paths
+        required: false
+        type: string
+        default: ""
+    secrets:
+      sonar_token:
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sonarqube:
+    runs-on: ${{ inputs.runs_on }}
+    name: SonarQube Manual Scan (${{ inputs.quality_profile }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+          fetch-depth: ${{ inputs.fetch_depth }}
+
+      - name: Cache SonarQube scanner data
+        uses: actions/cache@v5
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar-${{ hashFiles('sonar-project.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-sonar-
+
+      - name: Download coverage artifacts
+        if: inputs.coverage_workflow_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.coverage_workflow_run_id }}
+          pattern: ${{ inputs.coverage_artifact_pattern }}
+          path: ./
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fix code coverage paths
+        if: inputs.coverage_files_to_rewrite != ''
+        run: |
+          IFS=',' read -ra FILES <<< "${{ inputs.coverage_files_to_rewrite }}"
+          for file in "${FILES[@]}"; do
+            if [ -f "$file" ]; then
+              sed -i 's@'"$GITHUB_WORKSPACE"'@/github/workspace@g' "$file"
+            fi
+          done
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.sonar_token }}
+          SONAR_SCANNER_OPTS: "${{ inputs.sonar_scanner_opts }} -Dsonar.qualityprofile=${{ inputs.quality_profile }}"
