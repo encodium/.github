@@ -31,23 +31,12 @@ on:
         required: false
         type: string
         default: -Xmx4000m
-      coverage_workflow_run_id:
-        description: Workflow run ID to download coverage artifacts from (optional)
-        required: false
-        type: string
-        default: ""
-      coverage_artifact_pattern:
-        description: Artifact name pattern when downloading coverage (required with coverage_workflow_run_id)
-        required: false
-        type: string
-        default: ""
     secrets:
       sonar_token:
         required: true
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   sonarqube:
@@ -92,23 +81,12 @@ jobs:
 
           echo "previous_profile=${PREVIOUS}" >> "$GITHUB_OUTPUT"
           echo "project_key=${PROJECT_KEY}" >> "$GITHUB_OUTPUT"
-          echo "organization=${ORGANIZATION}" >> "$GITHUB_OUTPUT"
 
           curl -sf -u "${SONAR_TOKEN}:" -X POST \
             "https://sonarcloud.io/api/qualityprofiles/add_project" \
             --data-urlencode "project=${PROJECT_KEY}" \
             --data-urlencode "qualityProfile=${PROFILE}" \
             --data-urlencode "language=${LANGUAGE}"
-
-      - name: Download coverage artifacts
-        if: inputs.coverage_workflow_run_id != '' && inputs.coverage_artifact_pattern != ''
-        uses: actions/download-artifact@v4
-        with:
-          run-id: ${{ inputs.coverage_workflow_run_id }}
-          pattern: ${{ inputs.coverage_artifact_pattern }}
-          path: ./
-          merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6.0.0
