@@ -7,6 +7,11 @@ on:
         description: SonarCloud quality profile name (e.g. Sonar way)
         required: true
         type: string
+      sonar_language:
+        description: SonarCloud language key for the quality profile (e.g. php, java)
+        required: false
+        type: string
+        default: php
       ref:
         description: Branch, tag, or SHA to analyze (defaults to caller ref)
         required: false
@@ -22,6 +27,7 @@ on:
         type: string
         default: ubuntu-latest-8-cores
       sonar_scanner_opts:
+        description: JVM options for the Sonar scanner (e.g. -Xmx4000m)
         required: false
         type: string
         default: -Xmx4000m
@@ -31,12 +37,7 @@ on:
         type: string
         default: ""
       coverage_artifact_pattern:
-        description: Artifact name pattern when downloading coverage (e.g. coverage*)
-        required: false
-        type: string
-        default: coverage*
-      coverage_files_to_rewrite:
-        description: Comma-separated coverage.xml paths to rewrite for Sonar container paths
+        description: Artifact name pattern when downloading coverage (required with coverage_workflow_run_id)
         required: false
         type: string
         default: ""
@@ -67,8 +68,40 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-sonar-
 
+      - name: Switch SonarCloud quality profile
+        id: sonar_profile
+        env:
+          SONAR_TOKEN: ${{ secrets.sonar_token }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f sonar-project.properties ]; then
+            echo "sonar-project.properties not found in repository root" >&2
+            exit 1
+          fi
+
+          PROJECT_KEY=$(grep -E '^sonar\.projectKey=' sonar-project.properties | head -1 | cut -d= -f2- | tr -d ' \r')
+          ORGANIZATION=$(grep -E '^sonar\.organization=' sonar-project.properties | head -1 | cut -d= -f2- | tr -d ' \r')
+          LANGUAGE="${{ inputs.sonar_language }}"
+          PROFILE="${{ inputs.quality_profile }}"
+
+          RESPONSE=$(curl -sf -u "${SONAR_TOKEN}:" \
+            "https://sonarcloud.io/api/qualityprofiles/search?project=${PROJECT_KEY}&organization=${ORGANIZATION}")
+          PREVIOUS=$(echo "$RESPONSE" | jq -r --arg lang "$LANGUAGE" \
+            '.profiles[] | select(.language == $lang) | .name' | head -1)
+
+          echo "previous_profile=${PREVIOUS}" >> "$GITHUB_OUTPUT"
+          echo "project_key=${PROJECT_KEY}" >> "$GITHUB_OUTPUT"
+          echo "organization=${ORGANIZATION}" >> "$GITHUB_OUTPUT"
+
+          curl -sf -u "${SONAR_TOKEN}:" -X POST \
+            "https://sonarcloud.io/api/qualityprofiles/add_project" \
+            --data-urlencode "project=${PROJECT_KEY}" \
+            --data-urlencode "qualityProfile=${PROFILE}" \
+            --data-urlencode "language=${LANGUAGE}"
+
       - name: Download coverage artifacts
-        if: inputs.coverage_workflow_run_id != ''
+        if: inputs.coverage_workflow_run_id != '' && inputs.coverage_artifact_pattern != ''
         uses: actions/download-artifact@v4
         with:
           run-id: ${{ inputs.coverage_workflow_run_id }}
@@ -77,19 +110,22 @@ jobs:
           merge-multiple: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fix code coverage paths
-        if: inputs.coverage_files_to_rewrite != ''
-        run: |
-          IFS=',' read -ra FILES <<< "${{ inputs.coverage_files_to_rewrite }}"
-          for file in "${FILES[@]}"; do
-            if [ -f "$file" ]; then
-              sed -i 's@'"$GITHUB_WORKSPACE"'@/github/workspace@g' "$file"
-            fi
-          done
-
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.sonar_token }}
-          SONAR_SCANNER_OPTS: "${{ inputs.sonar_scanner_opts }} -Dsonar.qualityprofile=${{ inputs.quality_profile }}"
+          SONAR_SCANNER_OPTS: ${{ inputs.sonar_scanner_opts }}
+
+      - name: Restore SonarCloud quality profile
+        if: always() && steps.sonar_profile.outputs.previous_profile != ''
+        env:
+          SONAR_TOKEN: ${{ secrets.sonar_token }}
+        run: |
+          set -euo pipefail
+
+          curl -sf -u "${SONAR_TOKEN}:" -X POST \
+            "https://sonarcloud.io/api/qualityprofiles/add_project" \
+            --data-urlencode "project=${{ steps.sonar_profile.outputs.project_key }}" \
+            --data-urlencode "qualityProfile=${{ steps.sonar_profile.outputs.previous_profile }}" \
+            --data-urlencode "language=${{ inputs.sonar_language }}"
