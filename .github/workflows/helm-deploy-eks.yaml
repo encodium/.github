@@ -31,7 +31,7 @@ on:
         type: string
       timeout:
         description: "Timeout for helm upgrade"
-        default: "5m"
+        default: "15m"
         required: false
         type: string
       additional-values-file:
