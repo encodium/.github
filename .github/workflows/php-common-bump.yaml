@@ -158,9 +158,15 @@ jobs:
         # Only fires when freeze-check tripped AND the caller passed in a
         # webhook. Callers without the webhook still get the workflow-failure
         # signal via GH email / mobile notifications / red PR check.
+        #
+        # SLACK_WEBHOOK_TYPE must be set to INCOMING_WEBHOOK; v1.24.0 defaults
+        # to Workflow Builder mode otherwise, silently no-op-ing our POST.
+        # Sibling workflow slack-deploy-notification.yaml already handles it
+        # the same way — this line mirrors that pattern.
         if: failure() && steps.freeze-check.outputs.frozen == 'true' && env.SLACK_WEBHOOK_URL != ''
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         uses: slackapi/slack-github-action@v1.24.0
         with:
           payload: |
