@@ -115,7 +115,17 @@ jobs:
           # they diverge, there's a newer version but composer refused to
           # take it in the previous step. Use --format=json to parse safely.
           SHOW_JSON=$(composer show revolutionparts/common --latest --format=json 2>/dev/null || echo '{}')
-          LATEST=$(echo "$SHOW_JSON" | jq -r '.latest // .version // ""')
+          # printf, not echo. `echo "$SHOW_JSON" | jq` mangles JSON backslash
+          # escapes: common's composer.json ships a PSR-4 map like
+          # "RevolutionParts\\\\": "src/" (four backslashes → two literal
+          # in JSON → one literal in the parsed string), which echo
+          # collapses to single backslashes en route to jq's parser,
+          # invalidating the JSON. Verified locally 2026-08-10:
+          # `echo "$SHOW_JSON" | jq` → "parse error: Invalid numeric literal";
+          # `printf '%s' "$SHOW_JSON" | jq` → works. Without this fix the
+          # step would silently swallow every freeze detection (LATEST
+          # comes back empty → verdict "at latest" → freeze never surfaced).
+          LATEST=$(printf '%s' "$SHOW_JSON" | jq -r '.latest // .version // ""')
 
           echo "current=$CURRENT"
           echo "latest=$LATEST"
