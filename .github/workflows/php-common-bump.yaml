@@ -69,11 +69,22 @@ jobs:
       - name: Update Common
         env:
           COMPOSER_AUTH: '{"http-basic": {"repo.packagist.com": {"username": "${{ secrets.packagist_username }}", "password": "${{secrets.packagist_password}}"}}}'
+        # --with-all-dependencies is required so composer can cascade the
+        # update to peer packages that common's composer.json newly pins to
+        # exact versions (e.g. common v12.247 pinned ebay-fulfillment-api-php-
+        # client to 1.0.3 exactly; without --with-all-dependencies composer
+        # refuses to update common alone because the peer would violate the
+        # constraint, and it exits cleanly with "Nothing to modify in lock
+        # file" — silently freezing every app whose lock had the older peer
+        # version). Root-cause investigation: 2026-08-10 fleet sweep showed
+        # 7 RT participants (radmin, catalog_api, listings-url-service,
+        # payments, returns-api, rp_api, webstore) stuck at v12.246.2 for
+        # 10 days.
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 5
           max_attempts: 5
-          command: composer update revolutionparts/common --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
+          command: composer update revolutionparts/common --with-all-dependencies --prefer-dist --no-interaction --no-progress --optimize-autoloader --apcu-autoloader
       - name: Commit Common Bump
         id: commit
         env:
