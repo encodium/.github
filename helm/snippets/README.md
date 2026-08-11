@@ -18,7 +18,7 @@ Copy the `app.goMemoryLimit` define from [go-gomemlimit.tpl](./go-gomemlimit.tpl
 
 ### 2. `deployments/values.yaml`
 
-Add (or merge) under top-level chart-control keys:
+Add (or merge) under top-level chart-control keys (`go` is reserved by `helm-chart-lint` Rule 6):
 
 ```yaml
 go:

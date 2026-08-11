@@ -9,7 +9,8 @@
 */}}
 {{- define "app.goMemoryLimit" -}}
 {{- $memoryLimit := required "resources.limits.memory must be set" .Values.resources.limits.memory | toString -}}
-{{- $ratio := .Values.go.memoryLimitRatio | default 0.85 | float64 -}}
+{{- $go := .Values.go | default dict -}}
+{{- $ratio := $go.memoryLimitRatio | default 0.85 | float64 -}}
 {{- if not (hasSuffix "Mi" $memoryLimit) -}}
 {{- fail (printf "resources.limits.memory must use Mi suffix for GOMEMLIMIT calculation, got %q" $memoryLimit) -}}
 {{- end -}}

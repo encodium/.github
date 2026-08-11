@@ -14,7 +14,7 @@
 set -euo pipefail
 
 CHART_PATH="${CHART_PATH:-./deployments}"
-RESERVED_KEYS="${RESERVED_KEYS:-app budget daemons envConfigMap image imagePullSecrets ingress keda replicas resources serviceAccount serviceAccountName vault}"
+RESERVED_KEYS="${RESERVED_KEYS:-app budget daemons envConfigMap go image imagePullSecrets ingress keda replicas resources serviceAccount serviceAccountName vault}"
 
 # `app` is always implicitly reserved (Rule 5 requires it; the action.yml input
 # documents the per-chart list as "in addition to `app`"). Prepend defensively

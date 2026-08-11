@@ -40,7 +40,7 @@ jobs:
         env:
           CHART_PATH: .github/actions/helm-chart-lint/tests/fixtures/bad-chart
           RESERVED_KEYS: >-
-            app budget daemons envConfigMap image imagePullSecrets ingress keda
+            app budget daemons envConfigMap go image imagePullSecrets ingress keda
             replicas resources serviceAccount serviceAccountName vault
         run: |
           set +e
