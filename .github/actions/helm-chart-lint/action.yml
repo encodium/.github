@@ -31,6 +31,7 @@ inputs:
       budget
       daemons
       envConfigMap
+      go
       image
       imagePullSecrets
       ingress

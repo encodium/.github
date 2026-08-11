@@ -14,7 +14,7 @@
 set -euo pipefail
 
 CHART_PATH="${CHART_PATH:-./deployments}"
-RESERVED_KEYS="${RESERVED_KEYS:-app budget daemons envConfigMap image imagePullSecrets ingress keda replicas resources serviceAccount serviceAccountName vault}"
+RESERVED_KEYS="${RESERVED_KEYS:-app budget daemons envConfigMap go image imagePullSecrets ingress keda replicas resources serviceAccount serviceAccountName vault}"
 
 # `app` is always implicitly reserved (Rule 5 requires it; the action.yml input
 # documents the per-chart list as "in addition to `app`"). Prepend defensively
@@ -214,6 +214,22 @@ if [[ -d "$CHART_PATH/templates" ]]; then
     done < <(find "$CHART_PATH/templates" -type f \( -name '*.yaml' -o -name '*.tpl' \) -print0)
 
     rm -f "$RESERVED_LIST"
+fi
+
+end
+
+# ---------------------------------------------------------------------------
+# Rule 8 — Go services: warn when rendered chart lacks GOMEMLIMIT (PLAT-5173)
+# ---------------------------------------------------------------------------
+info "Rule 8: Go services should set GOMEMLIMIT"
+
+REPO_ROOT="$(cd "$CHART_PATH/.." && pwd)"
+if [[ -f "$REPO_ROOT/go.mod" ]]; then
+    if ! rendered="$(helm template "$CHART_PATH" 2>/tmp/helm-gomemlimit.err)"; then
+        echo "::warning::Rule 8 skipped: helm template failed for GOMEMLIMIT check ($(cat /tmp/helm-gomemlimit.err | tr '\n' ' '))"
+    elif ! echo "$rendered" | grep -qE 'name:[[:space:]]+GOMEMLIMIT'; then
+        echo "::warning::$CHART_PATH: go.mod present but rendered manifests lack GOMEMLIMIT env. See encodium/.github/helm/snippets/go-gomemlimit.tpl (PLAT-5173)."
+    fi
 fi
 
 end
