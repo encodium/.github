@@ -218,6 +218,22 @@ fi
 
 end
 
+# ---------------------------------------------------------------------------
+# Rule 8 — Go services: warn when rendered chart lacks GOMEMLIMIT (PLAT-5173)
+# ---------------------------------------------------------------------------
+info "Rule 8: Go services should set GOMEMLIMIT"
+
+REPO_ROOT="$(cd "$CHART_PATH/.." && pwd)"
+if [[ -f "$REPO_ROOT/go.mod" ]]; then
+    if ! rendered="$(helm template "$CHART_PATH" 2>/tmp/helm-gomemlimit.err)"; then
+        echo "::warning::Rule 8 skipped: helm template failed for GOMEMLIMIT check ($(cat /tmp/helm-gomemlimit.err | tr '\n' ' '))"
+    elif ! echo "$rendered" | grep -qE 'name:[[:space:]]+GOMEMLIMIT'; then
+        echo "::warning::$CHART_PATH: go.mod present but rendered manifests lack GOMEMLIMIT env. See encodium/.github/helm/snippets/go-gomemlimit.tpl (PLAT-5173)."
+    fi
+fi
+
+end
+
 if [[ "$FAILED" -ne 0 ]]; then
     echo "::error::helm-chart-lint: one or more rules failed. See annotations above." >&2
     exit 1
