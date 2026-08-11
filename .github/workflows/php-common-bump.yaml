@@ -138,17 +138,22 @@ jobs:
             exit 0
           fi
 
-          # SILENT FREEZE. Emit diagnostic, then fail.
+          # AUTOMATIC UPDATE BLOCKED. Emit diagnostic, then fail.
+          #
+          # Wording chosen to avoid collision with the org's existing "code
+          # freeze" convention — this alert is about composer failing to
+          # cascade a common update because peer constraints in common moved.
+          # It's an automated-update problem, not a code-freeze.
           {
-            echo "## 🧊 Silent common freeze detected"
+            echo "## ⚠️ Common could not be automatically updated"
             echo ""
             echo "\`composer.lock\` is at \`revolutionparts/common@${CURRENT}\` but Packagist has \`${LATEST}\`."
-            echo "The previous \`composer update revolutionparts/common\` step reported \"Nothing to modify\" — but that was a resolver-abort, not a real no-op. Almost always caused by common raising a peer package's minimum version above what this repo's lock has."
+            echo "The previous \`composer update revolutionparts/common\` step reported \"Nothing to modify\" — but that was a resolver-abort, not a real no-op. Almost always caused by common raising one or more peer packages' minimum versions above what this repo's lock has (composer's default \`update <pkg>\` doesn't cascade to peers)."
             echo ""
             echo "### Diagnostic (\`composer why-not\`)"
             echo ""
             echo '```'
-            composer why-not "revolutionparts/common:${LATEST}" 2>&1 || true
+            composer why-not revolutionparts/common "${LATEST}" 2>&1 || true
             echo '```'
             echo ""
             echo "### Recovery"
@@ -160,7 +165,7 @@ jobs:
             echo "Commit the resulting \`composer.lock\` diff via PR."
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "::error::composer.lock is at common@${CURRENT} but Packagist has ${LATEST}. Silent freeze — a peer constraint blocked the update. See job summary for the composer why-not diagnostic."
+          echo "::error::composer.lock is at common@${CURRENT} but Packagist has ${LATEST}. Common could not be automatically updated — peer constraints in common blocked the update. See job summary for the composer why-not diagnostic."
           echo "frozen=true" >> "$GITHUB_OUTPUT"
           exit 1
 
@@ -181,13 +186,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "🧊 common freeze on ${{ github.repository }} — locked at ${{ steps.freeze-check.outputs.current }}, Packagist has ${{ steps.freeze-check.outputs.latest }}",
+              "text": "⚠️ Common could not be automatically updated on ${{ github.repository }} — lock at ${{ steps.freeze-check.outputs.current }}, Packagist has ${{ steps.freeze-check.outputs.latest }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "🧊 *Silent common freeze on `${{ github.repository }}`*\n\n`composer.lock` at *common@${{ steps.freeze-check.outputs.current }}* but Packagist has *${{ steps.freeze-check.outputs.latest }}*. `composer update revolutionparts/common` returned a false no-op — a peer constraint likely blocked the update.\n\nRecovery: `composer update revolutionparts/common -w` locally, commit the lock diff."
+                    "text": "⚠️ *Common could not be automatically updated on `${{ github.repository }}`*\n\n`composer.lock` is at *common@${{ steps.freeze-check.outputs.current }}* but Packagist has *${{ steps.freeze-check.outputs.latest }}*. `composer update revolutionparts/common` reported no changes — one or more peer constraints in common likely require lockfile bumps that `composer update` alone doesn't cascade.\n\n*Recovery:* run `composer update revolutionparts/common -w` locally and commit the lock diff."
                   },
                   "accessory": {
                     "type": "button",
