@@ -160,7 +160,7 @@ jobs:
             echo ""
             echo "Run locally:"
             echo '```'
-            echo "composer update revolutionparts/common -w"
+            echo "composer update revolutionparts/common -W"
             echo '```'
             echo "Commit the resulting \`composer.lock\` diff via PR."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -192,7 +192,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "⚠️ *Common could not be automatically updated on `${{ github.repository }}`*\n\n`composer.lock` is at *common@${{ steps.freeze-check.outputs.current }}* but Packagist has *${{ steps.freeze-check.outputs.latest }}*. `composer update revolutionparts/common` reported no changes — one or more peer constraints in common likely require lockfile bumps that `composer update` alone doesn't cascade.\n\n*Recovery:* run `composer update revolutionparts/common -w` locally and commit the lock diff."
+                    "text": "⚠️ *Common could not be automatically updated on `${{ github.repository }}`*\n\n`composer.lock` is at *common@${{ steps.freeze-check.outputs.current }}* but Packagist has *${{ steps.freeze-check.outputs.latest }}*. `composer update revolutionparts/common` reported no changes — one or more peer constraints in common likely require lockfile bumps that `composer update` alone doesn't cascade.\n\n*Recovery:* run `composer update revolutionparts/common -W` locally and commit the lock diff."
                   },
                   "accessory": {
                     "type": "button",
