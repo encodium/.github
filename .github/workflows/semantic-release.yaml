@@ -21,17 +21,129 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # fetch-depth: 0 brings the tags, which the detection step below needs to resolve
+          # `refs/tags/<previous_tag>`. Do not make this shallow.
           fetch-depth: 0
+
+      # Learn the previous tag before tagging. Needed separately because the action leaves
+      # `previous_version` undefined whenever `custom_tag` is set, which the breaking-change
+      # path below does.
+      - name: Compute next version (dry run)
+        id: dry
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          fetch_all_tags: true
+          dry_run: true
+
+      # github-tag-action@v6.2 calls @semantic-release/commit-analyzer@8 as a library and
+      # passes it no preset, so it parses with `angular`, whose headerPattern predates the
+      # Conventional Commits `!` marker and which defines no breakingHeaderPattern:
+      #     /^(\w*)(?:\((.*)\))?: (.*)$/
+      # `feat(scope)!: ...` fails that regex outright, so the type is discarded along with the
+      # breaking signal, no release rule fires, and the action falls back to
+      # `default_bump: patch`. Its changelog step separately uses the `conventionalcommits`
+      # preset, which *does* understand `!`. That split brain shipped
+      # encodium/vehicle-service v1.1.1: a patch whose own release notes were headed
+      # "BREAKING CHANGES". Upstream #80 and #208 are open and v6.2 (2024-03) is the last
+      # release, so detect it here.
+      #
+      # NOTE: the subject check assumes conventional-commit PR titles, since the squash
+      # subject comes from the PR title. The convention documented in git-commit-lint.yaml is
+      # `<TICKET-ID>: <description>`, under which a `!` marker could never appear. Repos using
+      # that style rely on the footer check instead.
+      - name: Detect breaking changes since previous tag
+        id: breaking
+        env:
+          PREV_TAG: ${{ steps.dry.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          # getLatestTag() returns a synthetic `v0.0.0` when the repo has no tags. Scanning all
+          # history in that case would force 1.0.0 off some ancient `!` commit, so leave a
+          # repo's first release on the normal path.
+          if ! git rev-parse -q --verify "refs/tags/${PREV_TAG}" >/dev/null; then
+            echo "No previous tag (${PREV_TAG}); skipping breaking-change detection."
+            echo "breaking=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          subjects=$(git log --format='%s' "${PREV_TAG}..HEAD")
+          bodies=$(git log --format='%B' "${PREV_TAG}..HEAD")
+          breaking=false
+          # Here-strings, NOT pipes. `git log ... | grep -q` lets grep close the pipe on its
+          # first match; git log then dies with SIGPIPE (141); `pipefail` promotes that to the
+          # pipeline's status and the `if` takes the FALSE branch. That fails open -- the exact
+          # class of silent under-detection this step exists to prevent.
+          if grep -qE '^[a-zA-Z]+(\([^)]*\))?!:' <<< "$subjects"; then breaking=true; fi
+          # conventional-commits-parser accepts `BREAKING CHANGE` followed by `:` or whitespace,
+          # and the hyphenated spelling. Match the parser, not a stricter subset.
+          if grep -qE '^BREAKING[ -]CHANGE([:[:space:]])' <<< "$bodies"; then breaking=true; fi
+          echo "Breaking change detected: ${breaking}"
+          echo "breaking=${breaking}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute forced major
+        id: major
+        if: steps.breaking.outputs.breaking == 'true'
+        env:
+          PREV: ${{ steps.dry.outputs.previous_version }}
+        run: |
+          set -euo pipefail
+          # Refuse to guess. `set -u` does not help: PREV is *set* to empty by `env:`, and
+          # `$(( + 1 ))` is valid bash evaluating to 1 -- so an empty PREV would silently retag
+          # a v12.x package as v1.0.0. The action's custom_tag path performs no valid() or
+          # monotonicity check, unlike its normal path, so nothing downstream would catch it.
+          if ! [[ "$PREV" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::previous_version '$PREV' is not a plain release semver; refusing to force a major." >&2
+            exit 1
+          fi
+          # Mirrors semver.inc(version, 'major'), including 0.x -> 1.0.0.
+          echo "custom_tag=$(( ${PREV%%.*} + 1 )).0.0" >> "$GITHUB_OUTPUT"
+
+      # createTag() runs *inside* github-tag-action, and Private Packagist versions packages
+      # from git tags rather than GitHub Releases -- so any check placed after the tag step is
+      # a post-mortem, not a gate. This is a workflow expression precisely so it cannot fail
+      # open the way `[ "$a" -le "$b" ]` does on a non-integer operand (returns 2, and as an
+      # `if` condition does not trip `set -e`).
+      - name: Gate - a detected breaking change must carry a forced major
+        if: steps.breaking.outputs.breaking == 'true' && steps.major.outputs.custom_tag == ''
+        run: |
+          echo "::error::Breaking change detected but no forced major was computed; refusing to tag." >&2
+          exit 1
+
       - name: Bump version and push tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           fetch_all_tags: true
+          # Empty on every non-breaking push, which falls through to the action's normal bump
+          # path (core.getInput returns '' for both unset and empty, and `if (customTag)` is
+          # falsy). Note this sets release_type to `custom` rather than `major` when forced --
+          # nothing here consumes it, but build-php-laravel.yaml and build-php-v1.yaml do read
+          # this action's outputs, so audit them before copying this pattern across.
+          custom_tag: ${{ steps.major.outputs.custom_tag }}
+
+      - name: Verify the tag that was created
+        if: steps.breaking.outputs.breaking == 'true'
+        env:
+          EXPECTED: ${{ steps.major.outputs.custom_tag }}
+          ACTUAL: ${{ steps.tag_version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          # String equality with explicit emptiness checks. Also catches the action's
+          # early-return-when-tag-already-exists path, where new_version is set but this run
+          # created nothing.
+          if [ -z "$EXPECTED" ] || [ -z "$ACTUAL" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::expected v${EXPECTED:-<empty>}, action produced v${ACTUAL:-<empty>}." >&2
+            exit 1
+          fi
+
       - name: Create a GitHub release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.tag_version.outputs.new_tag }}
           name: ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ steps.tag_version.outputs.changelog }}
-          prerelease: ${{ steps.tag_version.outputs.is_prerelease }}
+          # github-tag-action has no `is_prerelease` output -- its outputs are new_tag,
+          # new_version, previous_tag, previous_version, release_type and changelog. This read
+          # the empty string on every run, and the workflow_call input above was never used.
+          prerelease: ${{ inputs.is_prerelease }}
