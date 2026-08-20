@@ -2,6 +2,11 @@ name: Go Test
 on:
   workflow_call:
     inputs:
+      go_version:
+        description: Go version passed to actions/setup-go (pin minor; avoid 'stable')
+        required: false
+        type: string
+        default: 1.26.x
       golangci_lint_version:
         description: golangci-lint version passed to golangci-lint-action
         required: false
@@ -20,7 +25,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: stable
+          go-version: ${{ inputs.go_version }}
           check-latest: true
       - name: Go mod cache
         id: go-cache
