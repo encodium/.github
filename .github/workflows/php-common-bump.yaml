@@ -19,6 +19,29 @@ on:
         required: false
         type: boolean
         default: true
+      slack_alerts:
+        description: "Post the 'could not be automatically updated' alert to Slack when freeze detection trips."
+        required: false
+        type: boolean
+        # MUTED — temporary, pending DEVEX-1773.
+        #
+        # These alerts currently land in #releases, where they're drowning the
+        # deploy notifications they sit next to. DEVEX-1773 moves them to the
+        # owning team's channel via a CODEOWNERS lookup, but it's gated on
+        # provisioning the encodium-ci-notifier Slack app (chat:write + the
+        # SLACK_CI_NOTIFIER_TOKEN org secret), which isn't done yet.
+        #
+        # Muting the Slack post only. Freeze detection itself is untouched:
+        # the step still writes the why-not diagnostic to the job summary,
+        # still emits ::error::, and still exits 1. Callers keep the signal
+        # via the red check and GH email/mobile — the same path the workflow
+        # already documents for callers that never passed a webhook.
+        #
+        # To restore: flip this default back to true. Individual callers can
+        # opt in early by passing slack_alerts: true. When DEVEX-1773 lands it
+        # replaces this step wholesale (chat.postMessage + resolve-notify-channel),
+        # and this input should be removed rather than re-defaulted.
+        default: false
     secrets:
       write_pat:
         required: true
@@ -27,12 +50,15 @@ on:
       packagist_password:
         required: true
       slack_webhook_url:
-        # Optional. When set, a "silent-freeze detected" alert is posted to
-        # this webhook if the freeze-detection step trips. Freeze detection
-        # itself still runs (and fails the workflow loudly) regardless.
-        # Callers on RT participants should pass secrets.SLACK_WEBHOOK_URL
-        # so #releases gets the alert; callers without the secret still get
-        # the workflow-failure signal via GH email/mobile.
+        # Optional. When set AND inputs.slack_alerts is true, a "could not be
+        # automatically updated" alert is posted to this webhook if the
+        # freeze-detection step trips. Freeze detection itself still runs
+        # (and fails the workflow loudly) regardless of either.
+        #
+        # slack_alerts currently defaults to false (see above), so passing
+        # this secret is a no-op for the moment. Callers should keep passing
+        # it — no caller changes are needed for the mute, and DEVEX-1773 will
+        # migrate this path off webhooks entirely.
         required: false
     outputs:
       commit_sha:
@@ -170,15 +196,19 @@ jobs:
           exit 1
 
       - name: Post freeze alert to Slack
-        # Only fires when freeze-check tripped AND the caller passed in a
-        # webhook. Callers without the webhook still get the workflow-failure
-        # signal via GH email / mobile notifications / red PR check.
+        # Currently MUTED: inputs.slack_alerts defaults to false pending
+        # DEVEX-1773. See the input definition above for why and how to undo.
+        #
+        # Otherwise fires only when freeze-check tripped AND the caller passed
+        # in a webhook. Callers without the webhook still get the
+        # workflow-failure signal via GH email / mobile notifications / red
+        # PR check.
         #
         # SLACK_WEBHOOK_TYPE must be set to INCOMING_WEBHOOK; v1.24.0 defaults
         # to Workflow Builder mode otherwise, silently no-op-ing our POST.
         # Sibling workflow slack-deploy-notification.yaml already handles it
         # the same way — this line mirrors that pattern.
-        if: failure() && steps.freeze-check.outputs.frozen == 'true' && env.SLACK_WEBHOOK_URL != ''
+        if: failure() && inputs.slack_alerts && steps.freeze-check.outputs.frozen == 'true' && env.SLACK_WEBHOOK_URL != ''
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
